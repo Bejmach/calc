@@ -13,6 +13,7 @@ Operator :: enum {
 	Sub,
 	Mult,
 	Div,
+	Pow,
 }
 
 Scope :: struct {
@@ -133,57 +134,77 @@ solve_part :: proc(part: ^Part, debug: bool) -> (result: f64, succes: bool) {
 			}
 			return left / right, true
 		}
+
+	case .Pow:
+		left, l_ok := solve_part(part.left, debug)
+		right, r_ok := solve_part(part.right, debug)
+
+		if l_ok && r_ok {
+			return math.pow_f64(left, right), true
+		}
 	}
 	return 0, false
 }
 
-first_order_ops := []rune{'*', '/'}
+first_order_ops := []rune{'^'}
 
-second_order_ops := []rune{'+', '-'}
+second_order_ops := []rune{'*', '/'}
+
+third_order_ops := []rune{'+', '-'}
 
 ops_map := map[rune]Operator {
 	'*' = .Mult,
 	'/' = .Div,
 	'+' = .Add,
 	'-' = .Sub,
+	'^' = .Pow,
 }
 
 // Rounded to 15 numbers after dot
 const_map := map[string]string {
 	"PI"  = "3.14159265358979323846264338327950288",
+	"HI"  = "3.14159265358979323846264338327950288", // alias for "PI" to allow for writing of "cou(HI)"
 	"TAU" = "6.28318530717958647692528676655900576",
 	"E"   = "2.71828182845904523536",
 }
 
 split_part :: proc(p: ^Part, parsers: ^[]rune) {
-	occurences := [dynamic]int{}
-	defer delete(occurences)
-	find_all_ops(p.content, parsers^, &occurences)
+	current_part: ^Part = p
+	stack := [dynamic]^Part{}
+	defer delete(stack)
+	for {
+		if current_part != nil {
+			if current_part.operator == Operator.Nil {
+				occurences := [dynamic]int{}
+				defer delete(occurences)
+				find_all_ops(current_part.content, parsers^, &occurences)
 
-	#reverse for id in occurences {
-		current_part: ^Part = p
-
-		for {
-			if current_part.left == nil {
-				break
+				#reverse for id in occurences {
+					operator: rune = rune(p.content[id])
+					ops, ok := ops_map[operator]
+					if !ok {
+						//			fmt.println(operator)
+						return
+					}
+					left_part: ^Part = new(Part)
+					left_part.content = current_part.content[:id]
+					right_part: ^Part = new(Part)
+					right_part.content = current_part.content[id + 1:]
+					current_part.left = left_part
+					current_part.right = right_part
+					current_part.operator = ops
+				}
 			}
-			current_part = current_part.left
+			append(&stack, current_part.left, current_part.right)
 		}
-
-		operator: rune = rune(p.content[id])
-		ops, ok := ops_map[operator]
-		if !ok {
-			//			fmt.println(operator)
-			return
+		if len(stack) > 0 {
+			current_part = pop(&stack)
+		} else {
+			break
 		}
-		left_part: ^Part = new(Part)
-		left_part.content = current_part.content[:id]
-		right_part: ^Part = new(Part)
-		right_part.content = current_part.content[id + 1:]
-		current_part.left = left_part
-		current_part.right = right_part
-		current_part.operator = ops
 	}
+
+
 }
 
 /// Tries to solve passed string and returns provided string if failed
@@ -255,11 +276,10 @@ solve :: proc(s: string, is_first: bool, debug: bool) -> (r: string, succes: boo
 	base_part.content = final_func
 
 	// Operation order reversed because the solver works from bottom of the tree where the later solved operatiors land
-
-	// Split second order operators
+	split_part(base_part, &third_order_ops)
 	split_part(base_part, &second_order_ops)
+	split_part(base_part, &first_order_ops)
 
-	// Split first order operators
 	current_part: ^Part = base_part
 	stack := [dynamic]^Part{}
 	defer delete(stack)

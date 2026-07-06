@@ -21,6 +21,7 @@ func_arr := []string{
 	"sin",
 	"sen", // "sin" alias to allow for writing of sen(PI)
 	"cos",
+	"cou", // "cos" alias to allow for writing of cou(HI)
 	"tan"
 }
 
@@ -42,7 +43,7 @@ func_wrap :: proc(name: string, args: []f64) -> (result: f64, succes: bool) {
 		if len(args) == 1 {
 			return math.sin_f64(args[0]), true
 		}
-	case "cos":
+	case "cos", "cou":
 		if len(args) == 1 {
 			return math.cos_f64(args[0]), true
 		}
