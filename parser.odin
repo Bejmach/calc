@@ -180,10 +180,10 @@ split_part :: proc(p: ^Part, parsers: ^[]rune) {
 				find_all_ops(current_part.content, parsers^, &occurences)
 
 				#reverse for id in occurences {
-					operator: rune = rune(p.content[id])
+					operator: rune = rune(current_part.content[id])
 					ops, ok := ops_map[operator]
 					if !ok {
-						//			fmt.println(operator)
+						//			fmt.println("Not Ok", operator)
 						return
 					}
 					left_part: ^Part = new(Part)

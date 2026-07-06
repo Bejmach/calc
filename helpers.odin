@@ -1,5 +1,6 @@
 package calc
 
+import "core:fmt"
 import "core:strings"
 
 find_all_ops :: proc(s: string, looking_for: []rune, out: ^[dynamic]int) {
@@ -36,7 +37,6 @@ find_all_ops :: proc(s: string, looking_for: []rune, out: ^[dynamic]int) {
 		} else {
 			ignore_next = false
 		}
-
 	}
 }
 
