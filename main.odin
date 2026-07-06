@@ -1,0 +1,317 @@
+#+feature dynamic-literals
+package calc
+
+import "core:fmt"
+import "core:math"
+import "core:os"
+import "core:strings"
+
+import rl "vendor:raylib"
+
+EditMode :: enum {
+	Append,
+	Replace,
+}
+
+Config :: struct {
+	width, height:                                           i32,
+	font_size:                                               i32,
+	backspace_wait_time, backspace_repeat_time:              f32,
+	blink_frames:                                            int,
+	background_color, input_color, func_color, result_color: rl.Color,
+}
+
+print_help :: proc() {
+	print_arr := []string {
+		"Usage: {exec} [options]",
+		"",
+		"Options:",
+		"-h, --help                     Prints this message",
+		"-d, --debug                    Prints debug messages",
+		"-H, --headless \"<func>\"	       Runs program in headless mode",
+	}
+
+	for line in print_arr{
+		fmt.println(line)
+	}
+}
+
+main :: proc() {
+	args := os.args
+
+	headless := false
+	h_func := ""
+	debug := false
+
+	for cur_arg := 1; cur_arg < len(args); cur_arg += 1 {
+		arg := args[cur_arg]
+
+		switch arg {
+		case "-h", "--help":
+			print_help()
+			return
+		case "-d", "--debug":
+			debug = true
+		case "-H", "--headless":
+			headless = true
+			if cur_arg + 1 < len(args) {
+				h_func = args[cur_arg + 1]
+				cur_arg += 1
+			} else {
+				fmt.println("function for headless mode was not provided")
+				fmt.println("Example usage: calc -h \"2+2\"")
+				return
+			}
+		case:
+			fmt.printfln("Option %s is not supported", arg)
+		}
+	}
+
+	if headless{
+		run_headless(h_func, debug)
+	} else{
+		run_gui(debug)
+	}
+
+}
+
+run_headless :: proc(func: string, debug: bool){
+	result, ok := solve(func, true, debug)
+	if ok{
+		fmt.println(strip_zeros(result))
+	} else{
+		fmt.println("Failed to solve equasion")
+		fmt.println("Try using --debug to check what failed")
+	}
+}
+
+run_gui :: proc(debug: bool) {
+	result: string = ""
+	cresult: cstring = ""
+	measured_text: cstring = ""
+	ok: bool = false
+
+	c: Config = Config {
+		800,
+		200,
+		40,
+		0.45,
+		0.05,
+		20,
+		{0, 0, 0, 255},
+		{255, 255, 255, 255},
+		{0, 0, 0, 255},
+		{255, 255, 255, 255},
+	}
+
+	cur_func := [dynamic]u8{0}
+	defer delete(cur_func)
+	parsed_func: string
+	cursor := 0
+
+	exitWindowRequested: bool = false
+	exitWindow: bool = false
+
+	is_backspace_pressed: bool = false
+	backspace_timer: f32 = 0.0
+
+	edit_mode := EditMode.Append
+
+	blink_counter := 0
+	blink_cycle := c.blink_frames * 2
+
+
+	text_box := rl.Rectangle{20, 20, f32(c.width) - 40, f32(c.font_size) + 10}
+
+	rl.SetTraceLogLevel(.ERROR)
+	rl.InitWindow(c.width, c.height, "calc")
+	rl.SetExitKey(.ESCAPE)
+
+	rl.SetTargetFPS(60)
+	for (!exitWindow) {
+
+		delta := rl.GetFrameTime()
+		blink_counter = (blink_counter + 1) % blink_cycle
+
+		if rl.WindowShouldClose() {
+			exitWindow = true
+		}
+
+		if rl.IsKeyPressed(.INSERT) {
+			switch edit_mode {
+			case .Append:
+				edit_mode = .Replace
+			case .Replace:
+				edit_mode = .Append
+			}
+		}
+
+		if rl.IsKeyPressed(.LEFT) {
+			cursor = math.clamp(cursor - 1, 0, len(cur_func) - 1)
+			measured_text = strings.clone_to_cstring(parsed_func[0:cursor])
+		}
+		if rl.IsKeyPressed(.RIGHT) {
+			cursor = math.clamp(cursor + 1, 0, len(cur_func) - 1)
+			measured_text = strings.clone_to_cstring(parsed_func[0:cursor])
+		}
+		char: rune = rl.GetCharPressed()
+
+		if char > 0 {
+			for char > 0 {
+				if char >= 32 && char <= 125 {
+					switch edit_mode {
+					case .Append:
+						inject_at(&cur_func, cursor, u8(char))
+					case .Replace:
+						if cursor == len(cur_func) - 1 {
+							inject_at(&cur_func, cursor, u8(char))
+						} else {
+							cur_func[cursor] = u8(char)
+						}
+					}
+
+					cursor += 1
+				}
+				char = rl.GetCharPressed()
+			}
+			parsed_func = transmute(string)cur_func[:len(cur_func) - 1]
+
+			result, ok = solve(parsed_func, true, debug)
+			if ok {
+				result = strip_zeros(result)
+				cresult = strings.clone_to_cstring(result)
+			} else {
+				cresult = ""
+			}
+			measured_text = strings.clone_to_cstring(parsed_func[0:cursor])
+
+			//fmt.println(result)
+		}
+
+		if rl.IsKeyDown(.BACKSPACE) {
+			backspace_timer += delta
+
+			allow_use: bool = !is_backspace_pressed
+			if backspace_timer > (c.backspace_wait_time + c.backspace_repeat_time) {
+				backspace_timer -= c.backspace_repeat_time
+				allow_use = true
+			}
+
+			if allow_use {
+				is_backspace_pressed = true
+				if len(cur_func) > 1 && cursor > 0 {
+					ordered_remove(&cur_func, cursor - 1)
+					cursor -= 1
+
+					parsed_func = transmute(string)cur_func[:len(cur_func) - 1]
+
+					result, ok = solve(parsed_func, true, debug)
+					if ok {
+						result = strip_zeros(result)
+						cresult = strings.clone_to_cstring(result)
+					} else {
+						cresult = ""
+					}
+					measured_text = strings.clone_to_cstring(parsed_func[0:cursor])
+					//fmt.println(result)
+				}
+			}
+		} else if rl.IsKeyReleased(.BACKSPACE) {
+			backspace_timer = 0.0
+			is_backspace_pressed = false
+		}
+
+		if rl.IsKeyPressed(.ENTER) {
+			if ok {
+				fmt.print(result)
+
+				exitWindow = true
+			}
+		}
+
+		// Draw
+
+		rl.BeginDrawing()
+		rl.ClearBackground(c.background_color)
+
+		rl.DrawRectangleRec(text_box, c.input_color)
+		rl.DrawText(
+			cstring(raw_data(cur_func)),
+			i32(text_box.x) + 5,
+			i32(text_box.y) + 8,
+			40,
+			c.func_color,
+		)
+
+		// Draw blinking pointer
+		if blink_counter < c.blink_frames {
+			offset_x := rl.MeasureText(measured_text, 40)
+
+			if cursor == 0 {
+				offset_x -= 4
+			}
+
+			cursor_rect: rl.Rectangle
+
+			switch edit_mode {
+			case .Append:
+				if cursor < len(parsed_func) {
+					cursor_rect = rl.Rectangle {
+						text_box.x + f32(offset_x) + 6,
+						text_box.y + (text_box.height * 0.1),
+						2,
+						text_box.height - (text_box.height * 0.2),
+					}
+				} else {
+					cursor_rect = rl.Rectangle {
+						text_box.x + f32(offset_x) + 7,
+						text_box.y + text_box.height - 8,
+						24,
+						2,
+					}
+				}
+			case .Replace:
+				if cursor < len(parsed_func) {
+					current_char := parsed_func[cursor:cursor + 1]
+					str_char := string(current_char)
+					measured_char := strings.clone_to_cstring(str_char)
+
+					cursor_rect = rl.Rectangle {
+						text_box.x + f32(offset_x) + 7,
+						text_box.y + text_box.height - 8,
+						f32(rl.MeasureText(measured_char, 40)) + 4,
+						2,
+					}
+				} else {
+					cursor_rect = rl.Rectangle {
+						text_box.x + f32(offset_x) + 7,
+						text_box.y + text_box.height - 8,
+						24,
+						2,
+					}
+				}
+			}
+
+			rl.DrawRectangleRec(cursor_rect, c.func_color)
+		}
+
+		if ok {
+			rl.DrawText(
+				cresult,
+				i32(text_box.x),
+				i32(text_box.y + text_box.height) + 20,
+				20,
+				c.result_color,
+			)
+		}
+
+		rl.EndDrawing()
+	}
+	rl.CloseWindow()
+}
+
+is_any_key_pressed :: proc() -> bool {
+	key := int(rl.GetKeyPressed())
+
+	return key >= 32 && key <= 126
+}
