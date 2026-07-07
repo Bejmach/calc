@@ -1,5 +1,7 @@
+#+feature dynamic-literals
 package calc
 
+import "base:runtime"
 import "core:fmt"
 import "core:strings"
 
@@ -20,7 +22,7 @@ find_all_ops :: proc(s: string, looking_for: []rune, out: ^[dynamic]int) {
 		}
 
 		scope_start = false
-		if r == '('{
+		if r == '(' {
 			scope_start = true
 		}
 
@@ -81,40 +83,108 @@ find_all_ocurences_substr :: proc(s: string, sub: string, out: ^[dynamic]int) {
 
 /// Find all scopes ignoring nested scopes
 find_all_scopes :: proc(s: string, out: ^[dynamic]Scope) {
-	offset := 0
-
 	scope_start := -1
 
 	scope_recursion := 0
-	is_func := false
+	scope_mode: ScopeMode
+
 	temp_func := false
 	ignore_end := 0
 	for r, pos in s {
-		if r == '(' {
+		switch r {
+		case '<':
+			scope_recursion += 1
+		case '>':
+			scope_recursion -= 1
+		case '(':
 			if scope_recursion == 0 {
 				scope_start = pos
 				if temp_func {
-					is_func = true
+					scope_mode = .Func
+				} else {
+					scope_mode = .Def
 				}
 			}
 			scope_recursion += 1
-		}
-		if r == ')' {
+
+		case ')':
 			if ignore_end == 0 {
 				scope_recursion -= 1
 				if scope_recursion == 0 {
-					append(out, Scope{scope_start, pos, s[scope_start + 1:pos], is_func})
-					is_func = false
+					append(out, Scope{scope_start, pos, s[scope_start + 1:pos], scope_mode})
 				}
 			} else {
 				ignore_end -= 1
 			}
 
 		}
+
 		temp_func = true
 		for op in ops_map {
 			if r == op {
 				temp_func = false
+			}
+		}
+	}
+}
+
+split_preserving_brackets :: proc(s: string) -> (res: []string){
+    depth := 0
+
+	splits := [dynamic]int{}
+	defer delete(splits)
+
+    for r, id in s {
+        switch r {
+        case '<':
+            depth += 1
+
+        case '>':
+            depth -= 1
+
+        case ',':
+            if depth == 0 {
+				append(&splits, id)
+            }
+        }
+    }
+	
+	n := len(splits)
+	res = make([]string, n + 1)
+	
+	if n == 0{
+		res[0] = s
+	} else {
+		res[0] = s[0:splits[0]]
+
+		for i:=1; i<n; i+=1{
+			res[i] = s[splits[i-1]+1 : splits[i]]
+		}
+
+		res[n] = s[splits[n-1]+1:]
+	}
+
+	return res
+}
+
+find_all_iterators :: proc(s: string, out: ^[dynamic]Iterator) {
+	iter_start := -1
+
+	iter_recursion := 0
+
+	for r, pos in s {
+		switch r {
+		case '<':
+			if iter_recursion == 0 {
+				iter_start = pos
+			}
+			iter_recursion += 1
+
+		case '>':
+			iter_recursion -= 1
+			if iter_recursion == 0 {
+				content: string = s[iter_start + 1:pos]
+				append(out, Iterator{iter_start, pos, split_preserving_brackets(content), 1})
 			}
 		}
 	}
@@ -136,9 +206,9 @@ strip_zeros :: proc(s: string) -> string {
 	ignore_end: int = 0
 	start: bool = false
 	for r in s {
-		switch r{
+		switch r {
 		case '0':
-			if start{
+			if start {
 				ignore_end += 1
 			}
 		case '.':
@@ -148,8 +218,8 @@ strip_zeros :: proc(s: string) -> string {
 			ignore_end = 0
 		}
 	}
-	final_end := end-ignore_end
-	if final_end == 2 && s[0] == '-' && s[1] == '0'{
+	final_end := end - ignore_end
+	if final_end == 2 && s[0] == '-' && s[1] == '0' {
 		return s[1:final_end]
 	}
 	return s[:final_end]

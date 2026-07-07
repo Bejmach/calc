@@ -16,10 +16,21 @@ Operator :: enum {
 	Pow,
 }
 
+ScopeMode :: enum {
+	Def,
+	Func,
+}
+
 Scope :: struct {
 	start, end: int,
 	content:    string,
-	is_func:    bool,
+	scope_mode: ScopeMode,
+}
+
+Iterator :: struct {
+	start, end: int,
+	content:    []string,
+	divider:    int, // divide number bu this before doing modulo to find correct option
 }
 
 Part :: struct {
@@ -143,7 +154,17 @@ solve_part :: proc(part: ^Part, debug: bool) -> (result: f64, succes: bool) {
 			return math.pow_f64(left, right), true
 		}
 	}
-	return 0, false
+	return {}, false
+}
+
+solve_iterator :: proc(i: ^Iterator, gen: int) -> (result: string, succes: bool) {
+	n := len(i.content)
+	if n == 0 {
+		return "", false
+	}
+
+	local_gen: int = gen / i.divider
+	return i.content[local_gen % n], true
 }
 
 first_order_ops := []rune{'^'}
@@ -207,35 +228,104 @@ split_part :: proc(p: ^Part, parsers: ^[]rune) {
 
 }
 
+solve :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
+	final_func, _ := strings.replace_all(s, " ", "")
+
+	for key, value in const_map {
+		final_func, _ = strings.replace_all(final_func, key, value)
+	}
+
+	return solve_iter(final_func, debug)
+}
+
+solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
+	gen_iterations := 1
+
+	iterators := [dynamic]Iterator{}
+	defer delete(iterators)
+
+	// Get all iterators in function
+	find_all_iterators(s, &iterators)
+
+	if len(iterators) == 0 {
+		r, succes = solve_no_iter(s, debug)
+		if succes {
+			r = strip_zeros(r)
+		}
+		return r, succes
+	}
+
+	// assing dividers for all iterators, to make the furthest ones change the most frequently
+	#reverse for &iter in iterators {
+		iter.divider = gen_iterations
+		gen_iterations *= len(iter.content)
+	}
+
+	generations := make([]string, gen_iterations)
+	defer delete(generations)
+
+	for g := 0; g < gen_iterations; g += 1 {
+		local_func := s
+		offset := 0
+		for &iter in iterators {
+			result, ok := solve_iterator(&iter, g)
+
+			iter_len := iter.end - iter.start + 1
+			result_len := len(result)
+			len_dif := iter_len - result_len
+
+			b := strings.builder_make()
+			strings.write_string(&b, local_func[:iter.start + offset])
+			strings.write_string(&b, result)
+			strings.write_string(&b, local_func[iter.end + 1 + offset:])
+			local_func = strings.to_string(b)
+
+			offset -= len_dif
+		}
+
+		result, ok := solve_iter(local_func, debug)
+		if ok {
+			generations[g] = result
+		} else {
+			generations[g] = "ERR"
+		}
+	}
+
+	joined := strings.join(generations, ", ")
+
+	gen_b := strings.builder_make()
+	strings.write_rune(&gen_b, '<')
+	strings.write_string(&gen_b, joined)
+	strings.write_rune(&gen_b, '>')
+	r = strings.to_string(gen_b)
+
+	return r, true
+}
+
 /// Tries to solve passed string and returns provided string if failed
-solve :: proc(s: string, is_first: bool, debug: bool) -> (r: string, succes: bool) {
+solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 	scopes := [dynamic]Scope{}
 	defer delete(scopes)
 
 	final_func := s
-	if is_first {
-		final_func, _ = strings.replace_all(s, " ", "")
-
-		for key, value in const_map {
-			final_func, _ = strings.replace_all(final_func, key, value)
-		}
-	}
 
 	find_all_scopes(final_func, &scopes)
-	//fmt.println(scopes)
+	if debug {
+		fmt.println(scopes)
+	}
 
 	for scope, id in scopes {
 		scope_result: string
 		ok: bool = true
 
-		if !scope.is_func {
-			scope_result, ok = solve(scope.content, false, debug)
-		} else {
+		if scope.scope_mode == .Def {
+			scope_result, ok = solve_no_iter(scope.content, debug)
+		} else if scope.scope_mode == .Func {
 			parts, _ := strings.split(scope.content, ",")
 			builder := strings.builder_make()
 			strings.write_rune(&builder, '(')
 			for part, id in parts {
-				part_result, part_ok := solve(part, false, debug)
+				part_result, part_ok := solve_no_iter(part, debug)
 				strings.write_string(&builder, part_result)
 				if id < len(parts) - 1 {
 					strings.write_rune(&builder, ',')
@@ -249,23 +339,21 @@ solve :: proc(s: string, is_first: bool, debug: bool) -> (r: string, succes: boo
 		}
 
 		//fmt.println(scope_result, ok)
+		offset := 0
 		if ok {
 			scope_len := scope.end - scope.start + 1
 			result_len := len(scope_result)
 			len_dif := scope_len - result_len
 
 			builder := strings.builder_make()
-			strings.write_string(&builder, final_func[:scope.start])
+			strings.write_string(&builder, final_func[:scope.start + offset])
 			strings.write_string(&builder, scope_result)
-			strings.write_string(&builder, final_func[scope.end + 1:])
+			strings.write_string(&builder, final_func[scope.end + 1 + offset:])
 			final_func = strings.to_string(builder)
 
 			//fmt.println(final_func)
 
-			for &scope in scopes {
-				scope.start -= len_dif
-				scope.end -= len_dif
-			}
+			offset -= len_dif
 		}
 	}
 

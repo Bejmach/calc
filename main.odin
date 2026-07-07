@@ -69,7 +69,7 @@ main :: proc() {
 }
 
 run_headless :: proc(func: string, debug: bool) {
-	result, ok := solve(func, true, debug)
+	result, ok := solve(func, debug)
 	if ok {
 		fmt.println(strip_zeros(result))
 	} else {
@@ -183,7 +183,7 @@ run_gui :: proc(debug: bool) {
 			}
 			parsed_func = transmute(string)cur_func[:len(cur_func) - 1]
 
-			result, ok = solve(parsed_func, true, debug)
+			result, ok = solve(parsed_func, debug)
 			if ok {
 				result = strip_zeros(result)
 				cresult = strings.clone_to_cstring(result)
@@ -212,7 +212,7 @@ run_gui :: proc(debug: bool) {
 
 					parsed_func = transmute(string)cur_func[:len(cur_func) - 1]
 
-					result, ok = solve(parsed_func, true, debug)
+					result, ok = solve(parsed_func, debug)
 					if ok {
 						result = strip_zeros(result)
 						cresult = strings.clone_to_cstring(result)

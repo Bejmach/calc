@@ -22,7 +22,8 @@ func_arr := []string{
 	"sen", // "sin" alias to allow for writing of sen(PI)
 	"cos",
 	"cou", // "cos" alias to allow for writing of cou(HI)
-	"tan"
+	"tan",
+	"vecLen"
 }
 
 func_wrap :: proc(name: string, args: []f64) -> (result: f64, succes: bool) {
@@ -51,10 +52,24 @@ func_wrap :: proc(name: string, args: []f64) -> (result: f64, succes: bool) {
 		if len(args) == 1 {
 			return math.tan_f64(args[0]), true
 		}
+	case "vecLen":
+		if len(args) > 0{
+			return func_vec_len(args), true
+		}
 	}
 
 
 	return 0, false
+}
+
+func_vec_len :: proc(values: []f64) -> f64{
+	result := values[0]
+
+	for i := 1; i<len(values); i+=1{
+		result = math.sqrt( math.pow_f64(result, 2) + math.pow_f64(values[i], 2) )
+	}
+
+	return result
 }
 
 func_round :: proc(value: f64, zeros: f64) -> f64 {
