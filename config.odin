@@ -8,10 +8,11 @@ import "core:strings"
 import rl "vendor:raylib"
 
 Config :: struct {
+	fps:                                                     i32,
 	width, height:                                           i32,
 	func_font_size, result_font_size:                        i32,
 	key_wait_time, key_repeat_time:                          f32,
-	blink_frames:                                            int,
+	blink_time:                                              f32,
 	background_color, input_color, func_color, result_color: rl.Color,
 }
 
@@ -29,6 +30,7 @@ get_config_file_path :: proc() -> (path: string, ok: bool) {
 
 update_config :: proc(conf_map: ^ini.Map, conf: ^Config) {
 	// Window
+	parse_i32(conf_map, "Window", "fps", &conf.fps)
 	parse_i32(conf_map, "Window", "width", &conf.width)
 	parse_i32(conf_map, "Window", "height", &conf.height)
 
@@ -39,7 +41,7 @@ update_config :: proc(conf_map: ^ini.Map, conf: ^Config) {
 	// Theme
 	parse_i32(conf_map, "Theme", "func_font_size", &conf.func_font_size)
 	parse_i32(conf_map, "Theme", "result_font_size", &conf.result_font_size)
-	parse_int(conf_map, "Theme", "blink_frames", &conf.blink_frames)
+	parse_f32(conf_map, "Theme", "blink_time", &conf.blink_time)
 
 	parse_color(conf_map, "Theme", "background_color", &conf.background_color)
 	parse_color(conf_map, "Theme", "input_color", &conf.input_color)

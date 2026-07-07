@@ -81,13 +81,14 @@ run_headless :: proc(func: string, debug: bool) {
 run_gui :: proc(debug: bool) {
 	// Default config
 	c: Config = Config {
+		30,
 		800,
 		200,
 		40,
 		20,
 		0.45,
 		0.05,
-		20,
+		0.33,
 		{0, 0, 0, 255},
 		{255, 255, 255, 255},
 		{0, 0, 0, 255},
@@ -122,7 +123,9 @@ run_gui :: proc(debug: bool) {
 	edit_mode := EditMode.Append
 
 	blink_counter := 0
-	blink_cycle := c.blink_frames * 2
+
+	blink_frames := int(f32(c.fps) * c.blink_time)
+	blink_cycle := blink_frames * 2
 
 
 	text_box := rl.Rectangle{20, 20, f32(c.width) - 40, f32(c.func_font_size) + 10}
@@ -131,7 +134,7 @@ run_gui :: proc(debug: bool) {
 	rl.InitWindow(c.width, c.height, "calc")
 	rl.SetExitKey(.ESCAPE)
 
-	rl.SetTargetFPS(60)
+	rl.SetTargetFPS(c.fps)
 	for (!exitWindow) {
 
 		delta := rl.GetFrameTime()
@@ -248,7 +251,7 @@ run_gui :: proc(debug: bool) {
 		)
 
 		// Draw blinking pointer
-		if blink_counter < c.blink_frames {
+		if blink_counter < blink_frames {
 			offset_x := rl.MeasureText(measured_text, c.func_font_size)
 
 			if cursor == 0 {
