@@ -150,7 +150,7 @@ split_preserving_brackets :: proc(s: string) -> (res: []string){
     }
 	
 	n := len(splits)
-	res = make([]string, n + 1)
+	res = make([]string, n + 1, context.temp_allocator)
 	
 	if n == 0{
 		res[0] = s

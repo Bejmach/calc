@@ -50,6 +50,11 @@ delete_part :: proc(part: ^Part) {
 	free(part)
 }
 
+delete_iter :: proc(iter: ^Iterator) {
+	delete(iter.content)
+	free(iter)
+}
+
 repeat :: proc(r: rune, n: int) -> string {
 	b := strings.builder_make()
 
@@ -62,6 +67,7 @@ repeat :: proc(r: rune, n: int) -> string {
 
 print_part :: proc(part: ^Part) {
 	stack := [dynamic]^Part{}
+	defer delete(stack)
 
 	current_part: ^Part = part
 	prefix := ""
@@ -224,12 +230,10 @@ split_part :: proc(p: ^Part, parsers: ^[]rune) {
 			break
 		}
 	}
-
-
 }
 
 solve :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
-	final_func, _ := strings.replace_all(s, " ", "")
+	final_func, _ := strings.replace_all(s, " ", "", context.temp_allocator)
 
 	for key, value in const_map {
 		final_func, _ = strings.replace_all(final_func, key, value)
@@ -246,6 +250,8 @@ solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 
 	// Get all iterators in function
 	find_all_iterators(s, &iterators)
+
+	fmt.println(iterators[:])
 
 	if len(iterators) == 0 {
 		r, succes = solve_no_iter(s, debug)
@@ -264,6 +270,9 @@ solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 	generations := make([]string, gen_iterations)
 	defer delete(generations)
 
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+
 	for g := 0; g < gen_iterations; g += 1 {
 		local_func := s
 		offset := 0
@@ -274,16 +283,20 @@ solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 			result_len := len(result)
 			len_dif := iter_len - result_len
 
-			b := strings.builder_make()
+			fmt.println(iter.start, offset)
+
+			strings.builder_reset(&b)
 			strings.write_string(&b, local_func[:iter.start + offset])
 			strings.write_string(&b, result)
 			strings.write_string(&b, local_func[iter.end + 1 + offset:])
-			local_func = strings.to_string(b)
+
+			local_func = strings.clone(strings.to_string(b))
 
 			offset -= len_dif
 		}
 
 		result, ok := solve_iter(local_func, debug)
+		fmt.println(result)
 		if ok {
 			generations[g] = result
 		} else {
@@ -292,6 +305,7 @@ solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 	}
 
 	joined := strings.join(generations, ", ")
+	defer delete(joined)
 
 	gen_b := strings.builder_make()
 	strings.write_rune(&gen_b, '<')
@@ -304,6 +318,7 @@ solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 
 /// Tries to solve passed string and returns provided string if failed
 solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
+	fmt.println(s)
 	scopes := [dynamic]Scope{}
 	defer delete(scopes)
 
@@ -316,6 +331,7 @@ solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 
 	for scope, id in scopes {
 		scope_result: string
+		defer delete(scope_result)
 		ok: bool = true
 
 		if scope.scope_mode == .Def {
@@ -323,6 +339,7 @@ solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 		} else if scope.scope_mode == .Func {
 			parts, _ := strings.split(scope.content, ",")
 			builder := strings.builder_make()
+			defer strings.builder_destroy(&builder)
 			strings.write_rune(&builder, '(')
 			for part, id in parts {
 				part_result, part_ok := solve_no_iter(part, debug)
@@ -335,7 +352,7 @@ solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 				}
 			}
 			strings.write_rune(&builder, ')')
-			scope_result = strings.to_string(builder)
+			scope_result = strings.clone(strings.to_string(builder))
 		}
 
 		//fmt.println(scope_result, ok)
@@ -346,10 +363,11 @@ solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 			len_dif := scope_len - result_len
 
 			builder := strings.builder_make()
+			defer strings.builder_destroy(&builder)
 			strings.write_string(&builder, final_func[:scope.start + offset])
 			strings.write_string(&builder, scope_result)
 			strings.write_string(&builder, final_func[scope.end + 1 + offset:])
-			final_func = strings.to_string(builder)
+			final_func = strings.clone(strings.to_string(builder))
 
 			//fmt.println(final_func)
 

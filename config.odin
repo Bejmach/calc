@@ -25,7 +25,9 @@ get_config_file_path :: proc() -> (path: string, ok: bool) {
 	path_b := strings.builder_make()
 	strings.write_string(&path_b, config_dir)
 	strings.write_string(&path_b, "/calc/calc.ini")
-	return strings.to_string(path_b), true
+	path = strings.to_string(path_b)
+	defer delete(path)
+	return path, true
 }
 
 update_config :: proc(conf_map: ^ini.Map, conf: ^Config) {
@@ -77,6 +79,7 @@ parse_color :: proc(conf_map: ^ini.Map, section, key: string, dst: ^rl.Color) {
 	if value, ok := conf_map[section][key]; ok {
 
 		split := strings.split(value, ",")
+		defer delete(split)
 
 		r, g, b, a := u8(255), u8(255), u8(255), u8(255)
 

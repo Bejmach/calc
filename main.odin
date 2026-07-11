@@ -4,6 +4,7 @@ package calc
 import "core:encoding/ini"
 import "core:fmt"
 import "core:math"
+import "core:mem"
 import "core:os"
 import "core:strings"
 
@@ -30,6 +31,22 @@ print_help :: proc() {
 }
 
 main :: proc() {
+	when ODIN_DEBUG {
+		track: mem.Tracking_Allocator
+		mem.tracking_allocator_init(&track, context.allocator)
+		context.allocator = mem.tracking_allocator(&track)
+
+		defer {
+			if len(track.allocation_map) > 0 {
+				fmt.eprintf("=== %v allocations not freed: ===\n", len(track.allocation_map))
+				for _, entry in track.allocation_map {
+					fmt.eprintf("- %v bytes @ %v\n", entry.size, entry.location)
+				}
+			}
+			mem.tracking_allocator_destroy(&track)
+		}
+	}
+
 	args := os.args
 
 	headless := false
@@ -65,7 +82,6 @@ main :: proc() {
 	} else {
 		run_gui(debug)
 	}
-
 }
 
 run_headless :: proc(func: string, debug: bool) {
@@ -105,8 +121,8 @@ run_gui :: proc(debug: bool) {
 	}
 
 	result: string = ""
-	cresult: cstring = ""
-	measured_text: cstring = ""
+	measured_text: string = ""
+
 	ok: bool = false
 
 	cur_func := [dynamic]u8{0}
@@ -155,11 +171,11 @@ run_gui :: proc(debug: bool) {
 
 		if rl.IsKeyPressed(.LEFT) {
 			cursor = math.clamp(cursor - 1, 0, len(cur_func) - 1)
-			measured_text = strings.clone_to_cstring(parsed_func[0:cursor])
+			measured_text = parsed_func[0:cursor]
 		}
 		if rl.IsKeyPressed(.RIGHT) {
 			cursor = math.clamp(cursor + 1, 0, len(cur_func) - 1)
-			measured_text = strings.clone_to_cstring(parsed_func[0:cursor])
+			measured_text = parsed_func[0:cursor]
 		}
 		char: rune = rl.GetCharPressed()
 
@@ -186,11 +202,8 @@ run_gui :: proc(debug: bool) {
 			result, ok = solve(parsed_func, debug)
 			if ok {
 				result = strip_zeros(result)
-				cresult = strings.clone_to_cstring(result)
-			} else {
-				cresult = ""
-			}
-			measured_text = strings.clone_to_cstring(parsed_func[0:cursor])
+			} 
+			measured_text = parsed_func[0:cursor]
 
 			//fmt.println(result)
 		}
@@ -215,11 +228,8 @@ run_gui :: proc(debug: bool) {
 					result, ok = solve(parsed_func, debug)
 					if ok {
 						result = strip_zeros(result)
-						cresult = strings.clone_to_cstring(result)
-					} else {
-						cresult = ""
 					}
-					measured_text = strings.clone_to_cstring(parsed_func[0:cursor])
+					measured_text = parsed_func[0:cursor]
 					//fmt.println(result)
 				}
 			}
@@ -252,7 +262,9 @@ run_gui :: proc(debug: bool) {
 
 		// Draw blinking pointer
 		if blink_counter < blink_frames {
-			offset_x := rl.MeasureText(measured_text, c.func_font_size)
+			cstr_measured: cstring = strings.clone_to_cstring(measured_text)
+			defer delete(cstr_measured)
+			offset_x := rl.MeasureText(cstr_measured, c.func_font_size)
 
 			if cursor == 0 {
 				offset_x -= 4
@@ -303,6 +315,8 @@ run_gui :: proc(debug: bool) {
 		}
 
 		if ok {
+			cresult: cstring = strings.clone_to_cstring(result)
+			defer delete(cresult)
 			rl.DrawText(
 				cresult,
 				i32(text_box.x),
@@ -313,6 +327,7 @@ run_gui :: proc(debug: bool) {
 		}
 
 		rl.EndDrawing()
+
 	}
 	rl.CloseWindow()
 }
