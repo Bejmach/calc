@@ -206,7 +206,7 @@ split_part :: proc(p: ^Part, parsers: ^[]rune) {
 				defer delete(occurences)
 				find_all_ops(current_part.content, parsers^, &occurences)
 
-				#reverse for id in occurences {
+				for id in occurences {
 					operator: rune = rune(current_part.content[id])
 					ops, ok := ops_map[operator]
 					if !ok {
@@ -251,8 +251,6 @@ solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 	// Get all iterators in function
 	find_all_iterators(s, &iterators)
 
-	fmt.println(iterators[:])
-
 	if len(iterators) == 0 {
 		r, succes = solve_no_iter(s, debug)
 		if succes {
@@ -267,71 +265,66 @@ solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 		gen_iterations *= len(iter.content)
 	}
 
-	generations := make([]string, gen_iterations)
-	defer delete(generations)
-
 	b := strings.builder_make()
 	defer strings.builder_destroy(&b)
 
+	strings.write_rune(&b, '<')
+
 	for g := 0; g < gen_iterations; g += 1 {
-		local_func := s
 		offset := 0
+
+		local_b := strings.builder_make()
+		defer strings.builder_destroy(&local_b)
+
 		for &iter in iterators {
 			result, ok := solve_iterator(&iter, g)
 
-			iter_len := iter.end - iter.start + 1
-			result_len := len(result)
-			len_dif := iter_len - result_len
+			strings.write_string(&local_b, s[offset:iter.start])
+			strings.write_string(&local_b, result)
 
-			fmt.println(iter.start, offset)
-
-			strings.builder_reset(&b)
-			strings.write_string(&b, local_func[:iter.start + offset])
-			strings.write_string(&b, result)
-			strings.write_string(&b, local_func[iter.end + 1 + offset:])
-
-			local_func = strings.clone(strings.to_string(b))
-
-			offset -= len_dif
+			offset = iter.end + 1
 		}
 
+		strings.write_string(&local_b, s[offset:])
+
+		local_func := strings.to_string(local_b)
+
 		result, ok := solve_iter(local_func, debug)
-		fmt.println(result)
 		if ok {
-			generations[g] = result
+			strings.write_string(&b, result)
 		} else {
-			generations[g] = "ERR"
+			strings.write_string(&b, "ERR")
+		}
+
+		if g+1 < gen_iterations{
+			strings.write_string(&b, ", ")
 		}
 	}
 
-	joined := strings.join(generations, ", ")
-	defer delete(joined)
+	strings.write_rune(&b, '>')
 
-	gen_b := strings.builder_make()
-	strings.write_rune(&gen_b, '<')
-	strings.write_string(&gen_b, joined)
-	strings.write_rune(&gen_b, '>')
-	r = strings.to_string(gen_b)
+	r = strings.clone(strings.to_string(b))
 
 	return r, true
 }
 
 /// Tries to solve passed string and returns provided string if failed
 solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
-	fmt.println(s)
 	scopes := [dynamic]Scope{}
 	defer delete(scopes)
 
-	final_func := s
-
-	find_all_scopes(final_func, &scopes)
+	find_all_scopes(s, &scopes)
 	if debug {
 		fmt.println(scopes)
 	}
 
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+
+	offset := 0
+
 	for scope, id in scopes {
 		scope_result: string
-		defer delete(scope_result)
 		ok: bool = true
 
 		if scope.scope_mode == .Def {
@@ -356,24 +349,18 @@ solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 		}
 
 		//fmt.println(scope_result, ok)
-		offset := 0
 		if ok {
-			scope_len := scope.end - scope.start + 1
-			result_len := len(scope_result)
-			len_dif := scope_len - result_len
-
-			builder := strings.builder_make()
-			defer strings.builder_destroy(&builder)
-			strings.write_string(&builder, final_func[:scope.start + offset])
-			strings.write_string(&builder, scope_result)
-			strings.write_string(&builder, final_func[scope.end + 1 + offset:])
-			final_func = strings.clone(strings.to_string(builder))
+			strings.write_string(&b, s[offset:scope.start])
+			strings.write_string(&b, scope_result)
 
 			//fmt.println(final_func)
 
-			offset -= len_dif
+			offset = scope.end + 1 
 		}
 	}
+	strings.write_string(&b, s[offset:])
+
+	final_func := strings.to_string(b)
 
 	final_func, _ = calculate_functons(final_func)
 
