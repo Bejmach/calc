@@ -42,6 +42,44 @@ find_all_ops :: proc(s: string, looking_for: []rune, out: ^[dynamic]int) {
 	}
 }
 
+find_last_op :: proc(s: string, looking_for: []rune) -> int{
+	scope_start: bool = true
+	ignore_next: bool = true
+	found_e: bool = false
+	final_id: int = -1
+	for r, id in s {
+		found: bool = false
+
+		for op in looking_for {
+			if op == r {
+				if !scope_start && !((op == '-' || op == '+') && found_e) {
+					found = true
+				}
+			}
+		}
+
+		scope_start = false
+		if r == '(' {
+			scope_start = true
+		}
+
+		found_e = false
+		if r == 'e' {
+			found_e = true
+		}
+
+		if found {
+			if !ignore_next {
+				ignore_next = true
+				final_id = id
+			}
+		} else {
+			ignore_next = false
+		}
+	}
+	return final_id
+}
+
 find_all_ocurences :: proc {
 	find_all_ocurences_rune,
 	find_all_ocurences_substr,

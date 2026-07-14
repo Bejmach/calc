@@ -57,12 +57,13 @@ delete_iter :: proc(iter: ^Iterator) {
 
 repeat :: proc(r: rune, n: int) -> string {
 	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
 
 	for i in 0 ..< n {
 		strings.write_rune(&b, r)
 	}
 
-	return strings.to_string(b)
+	return strings.clone(strings.to_string(b))
 }
 
 print_part :: proc(part: ^Part) {
@@ -83,12 +84,9 @@ print_part :: proc(part: ^Part) {
 			prefix = "R"
 
 		} else {
-			fmt.printfln(
-				"%s: %s %v",
-				prefix,
-				repeat('-', len(stack) + repeat_offset),
-				current_part,
-			)
+			repeat_str := repeat('-', len(stack) + repeat_offset)
+			defer delete(repeat_str)
+			fmt.printfln("%s: %s %v", prefix, repeat_str, current_part)
 
 			append(&stack, current_part)
 			current_part = current_part.left
@@ -204,9 +202,12 @@ split_part :: proc(p: ^Part, parsers: ^[]rune) {
 			if current_part.operator == Operator.Nil {
 				occurences := [dynamic]int{}
 				defer delete(occurences)
-				find_all_ops(current_part.content, parsers^, &occurences)
+				id := find_last_op(current_part.content, parsers^)
+				if id != -1 {
 
-				for id in occurences {
+					fmt.println(current_part)
+					fmt.println(occurences[:])
+
 					operator: rune = rune(current_part.content[id])
 					ops, ok := ops_map[operator]
 					if !ok {
@@ -220,6 +221,7 @@ split_part :: proc(p: ^Part, parsers: ^[]rune) {
 					current_part.left = left_part
 					current_part.right = right_part
 					current_part.operator = ops
+					fmt.println("+2")
 				}
 			}
 			append(&stack, current_part.left, current_part.right)
@@ -270,6 +272,9 @@ solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 
 	strings.write_rune(&b, '<')
 
+	result_array := [dynamic]string{}
+	defer delete(result_array)
+
 	for g := 0; g < gen_iterations; g += 1 {
 		offset := 0
 
@@ -291,21 +296,17 @@ solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 
 		result, ok := solve_iter(local_func, debug)
 		if ok {
-			strings.write_string(&b, result)
+			append(&result_array, result)
 		} else {
-			strings.write_string(&b, "ERR")
-		}
-
-		if g+1 < gen_iterations{
-			strings.write_string(&b, ", ")
+			append(&result_array, "ERR")
 		}
 	}
 
+	strings.write_string(&b, strings.join(result_array[:], ", "))
+
 	strings.write_rune(&b, '>')
 
-	r = strings.clone(strings.to_string(b))
-
-	return r, true
+	return strings.clone(strings.to_string(b)), true
 }
 
 /// Tries to solve passed string and returns provided string if failed
@@ -355,7 +356,7 @@ solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 
 			//fmt.println(final_func)
 
-			offset = scope.end + 1 
+			offset = scope.end + 1
 		}
 	}
 	strings.write_string(&b, s[offset:])
@@ -372,23 +373,6 @@ solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 	split_part(base_part, &third_order_ops)
 	split_part(base_part, &second_order_ops)
 	split_part(base_part, &first_order_ops)
-
-	current_part: ^Part = base_part
-	stack := [dynamic]^Part{}
-	defer delete(stack)
-	for {
-		if current_part != nil {
-			if current_part.operator == Operator.Nil {
-				split_part(current_part, &first_order_ops)
-			}
-			append(&stack, current_part.left, current_part.right)
-		}
-		if len(stack) > 0 {
-			current_part = pop(&stack)
-		} else {
-			break
-		}
-	}
 
 	if debug {
 		print_part(base_part)
