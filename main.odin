@@ -201,7 +201,7 @@ run_gui :: proc(debug: bool) {
 			parsed_func = transmute(string)cur_func[:len(cur_func) - 1]
 
 			result, ok = solve(parsed_func, debug)
-			fmt.println(result)
+			//fmt.println(result)
 			if ok {
 				result = strip_zeros(result)
 			}

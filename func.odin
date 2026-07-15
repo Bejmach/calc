@@ -113,6 +113,7 @@ calculate_functons :: proc(content: string) -> (result: string, succes: bool) {
 
 			str_params := new_content[params_start:params_end]
 			str_params_arr, _ := strings.split(str_params, ",")
+			defer delete(str_params_arr)
 			for param in str_params_arr {
 				f_param, ok := strconv.parse_f64(param)
 				if ok {

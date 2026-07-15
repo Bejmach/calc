@@ -202,12 +202,10 @@ split_part :: proc(p: ^Part, parsers: ^[]rune) {
 			if current_part.operator == Operator.Nil {
 				occurences := [dynamic]int{}
 				defer delete(occurences)
-				id := find_last_op(current_part.content, parsers^)
-				if id != -1 {
 
-					fmt.println(current_part)
-					fmt.println(occurences[:])
+				find_all_ops(current_part.content, parsers^, &occurences)
 
+				#reverse for id in occurences {
 					operator: rune = rune(current_part.content[id])
 					ops, ok := ops_map[operator]
 					if !ok {
@@ -221,10 +219,13 @@ split_part :: proc(p: ^Part, parsers: ^[]rune) {
 					current_part.left = left_part
 					current_part.right = right_part
 					current_part.operator = ops
-					fmt.println("+2")
+
+					current_part = current_part.left
+					append(&stack, current_part.right)
 				}
+			} else {
+				append(&stack, current_part.left, current_part.right)
 			}
-			append(&stack, current_part.left, current_part.right)
 		}
 		if len(stack) > 0 {
 			current_part = pop(&stack)
@@ -332,6 +333,7 @@ solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 			scope_result, ok = solve_no_iter(scope.content, debug)
 		} else if scope.scope_mode == .Func {
 			parts, _ := strings.split(scope.content, ",")
+			defer delete(parts)
 			builder := strings.builder_make()
 			defer strings.builder_destroy(&builder)
 			strings.write_rune(&builder, '(')
