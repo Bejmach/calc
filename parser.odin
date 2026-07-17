@@ -40,6 +40,15 @@ Part :: struct {
 	operator:    Operator,
 }
 
+CustomData :: struct {
+	functions: map[string]Function,
+	consts:    map[string]string,
+}
+Function :: struct {
+	args:      int,
+	operation: string,
+}
+
 delete_part :: proc(part: ^Part) {
 	if part == nil {
 		return
@@ -235,17 +244,71 @@ split_part :: proc(p: ^Part, parsers: ^[]rune) {
 	}
 }
 
-solve :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
-	final_func, _ := strings.replace_all(s, " ", "", context.temp_allocator)
-
-	for key, value in const_map {
-		final_func, _ = strings.replace_all(final_func, key, value)
+solve :: proc(
+	s: string,
+	customs: ^CustomData,
+	debug: bool,
+) -> (
+	r: string,
+	succes: bool,
+	was_allocated := false,
+) {
+	old_func := s
+	final_func, all := strings.replace_all(s, " ", "", context.allocator)
+	if all {
+		was_allocated = true
+		delete(old_func)
 	}
 
-	return solve_iter(final_func, debug)
+	final_const_arr := make([]string, len(const_map) + len(customs.consts))
+	defer delete(final_const_arr)
+
+	k := 0
+
+	for key, value in const_map {
+		final_const_arr[k] = key
+		k += 1
+	}
+	for key, value in customs.consts {
+		final_const_arr[k] = key
+		k += 1
+	}
+
+	slice.sort_by(final_const_arr[:], str_len_ord)
+
+	#reverse for const in final_const_arr {
+		old_func := final_func
+
+		new_value, ok := const_map[const]
+		if !ok {
+			new_value, _ = customs.consts[const]
+		}
+
+		final_func, all = strings.replace_all(final_func, const, new_value)
+		if all {
+			was_allocated = true
+			delete(old_func)
+		}
+	}
+
+	r, succes, all = solve_iter(final_func, customs, debug)
+
+	if was_allocated {
+		delete(final_func)
+	}
+
+	return r, succes, was_allocated
 }
 
-solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
+solve_iter :: proc(
+	s: string,
+	custom_functions: ^CustomData,
+	debug: bool,
+) -> (
+	r: string,
+	succes: bool,
+	was_allocated: bool,
+) {
 	gen_iterations := 1
 
 	iterators := [dynamic]Iterator{}
@@ -255,11 +318,11 @@ solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 	find_all_iterators(s, &iterators)
 
 	if len(iterators) == 0 {
-		r, succes = solve_no_iter(s, debug)
+		r, succes = solve_no_iter(s, custom_functions, debug)
 		if succes {
 			r = strip_zeros(r)
 		}
-		return r, succes
+		return r, succes, false
 	}
 
 	// assing dividers for all iterators, to make the furthest ones change the most frequently
@@ -272,9 +335,6 @@ solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 	defer strings.builder_destroy(&b)
 
 	strings.write_rune(&b, '<')
-
-	result_array := [dynamic]string{}
-	defer delete(result_array)
 
 	for g := 0; g < gen_iterations; g += 1 {
 		offset := 0
@@ -295,23 +355,34 @@ solve_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 
 		local_func := strings.to_string(local_b)
 
-		result, ok := solve_iter(local_func, debug)
+		result, ok, all := solve_iter(local_func, custom_functions, debug)
 		if ok {
-			append(&result_array, result)
+			strings.write_string(&b, result)
+			if all {
+				delete(result)
+			}
 		} else {
-			append(&result_array, "ERR")
+			strings.write_string(&b, "ERR")
+		}
+		if g < gen_iterations - 1 {
+			strings.write_string(&b, ", ")
 		}
 	}
 
-	strings.write_string(&b, strings.join(result_array[:], ", "))
-
 	strings.write_rune(&b, '>')
 
-	return strings.clone(strings.to_string(b)), true
+	return strings.clone(strings.to_string(b)), true, true
 }
 
 /// Tries to solve passed string and returns provided string if failed
-solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
+solve_no_iter :: proc(
+	s: string,
+	custom_functions: ^CustomData,
+	debug: bool,
+) -> (
+	r: string,
+	succes: bool,
+) {
 	scopes := [dynamic]Scope{}
 	defer delete(scopes)
 
@@ -326,46 +397,34 @@ solve_no_iter :: proc(s: string, debug: bool) -> (r: string, succes: bool) {
 	offset := 0
 
 	for scope, id in scopes {
-		scope_result: string
-		ok: bool = true
+		strings.write_string(&b, s[offset:scope.start])
 
 		if scope.scope_mode == .Def {
-			scope_result, ok = solve_no_iter(scope.content, debug)
+			scope_result, _ := solve_no_iter(scope.content, custom_functions, debug)
+			strings.write_string(&b, scope_result)
 		} else if scope.scope_mode == .Func {
-			parts, _ := strings.split(scope.content, ",")
-			defer delete(parts)
-			builder := strings.builder_make()
-			defer strings.builder_destroy(&builder)
-			strings.write_rune(&builder, '(')
+			parts := split_preserving_brackets(scope.content, {','})
+
+			strings.write_rune(&b, '(')
 			for part, id in parts {
-				part_result, part_ok := solve_no_iter(part, debug)
-				strings.write_string(&builder, part_result)
+				part_result, _ := solve_no_iter(part, custom_functions, debug)
+				strings.write_string(&b, part_result)
 				if id < len(parts) - 1 {
-					strings.write_rune(&builder, ',')
-				}
-				if !part_ok {
-					ok = false
+					strings.write_rune(&b, ',')
 				}
 			}
-			strings.write_rune(&builder, ')')
-			scope_result = strings.clone(strings.to_string(builder))
+			strings.write_rune(&b, ')')
 		}
 
 		//fmt.println(scope_result, ok)
-		if ok {
-			strings.write_string(&b, s[offset:scope.start])
-			strings.write_string(&b, scope_result)
-
-			//fmt.println(final_func)
-
-			offset = scope.end + 1
-		}
+		offset = scope.end + 1
 	}
 	strings.write_string(&b, s[offset:])
 
 	final_func := strings.to_string(b)
 
-	final_func, _ = calculate_functons(final_func)
+	final_func, _ = calculate_functons(final_func, custom_functions, debug)
+	defer delete(final_func)
 
 	base_part: ^Part = new(Part)
 	defer delete_part(base_part)

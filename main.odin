@@ -77,15 +77,25 @@ main :: proc() {
 		}
 	}
 
+	customs: CustomData
+	func_ok := load_custom_functions("./customs.json", &customs)
+	defer delete_customs(&customs)
+
 	if headless {
-		run_headless(h_func, debug)
+		run_headless(h_func, &customs, debug)
 	} else {
-		run_gui(debug)
+		run_gui(&customs, debug)
 	}
 }
 
-run_headless :: proc(func: string, debug: bool) {
-	result, ok := solve(func, debug)
+run_headless :: proc(func: string, customs: ^CustomData, debug: bool) {
+	f_clone := strings.clone(func)
+	result, ok, all := solve(f_clone, customs, debug)
+	if !all{
+		delete(f_clone)
+	}
+
+	defer delete(result)
 	if ok {
 		fmt.println(strip_zeros(result))
 	} else {
@@ -94,7 +104,7 @@ run_headless :: proc(func: string, debug: bool) {
 	}
 }
 
-run_gui :: proc(debug: bool) {
+run_gui :: proc(customs: ^CustomData, debug: bool) {
 	// Default config
 	c: Config = Config {
 		30,
@@ -118,6 +128,7 @@ run_gui :: proc(debug: bool) {
 		if map_ok {
 			update_config(&config_map, &c)
 		}
+		delete(conf_file)
 	}
 
 	result: string
@@ -198,14 +209,23 @@ run_gui :: proc(debug: bool) {
 				}
 				char = rl.GetCharPressed()
 			}
+
 			parsed_func = transmute(string)cur_func[:len(cur_func) - 1]
 
-			result, ok = solve(parsed_func, debug)
+			f_clone := strings.clone(parsed_func)
+			all: bool
+			
+			result, ok, all = solve(f_clone, customs, debug)
+
 			//fmt.println(result)
 			if ok {
 				result = strip_zeros(result)
 			}
 			measured_text = parsed_func[0:cursor]
+
+			if !all {
+				delete(f_clone)
+			}
 
 			//fmt.println(result)
 		}
@@ -227,11 +247,18 @@ run_gui :: proc(debug: bool) {
 
 					parsed_func = transmute(string)cur_func[:len(cur_func) - 1]
 
-					result, ok = solve(parsed_func, debug)
+					f_clone := strings.clone(parsed_func)
+					all: bool
+
+					result, ok, all = solve(f_clone, customs, debug)
 					if ok {
 						result = strip_zeros(result)
 					}
 					measured_text = parsed_func[0:cursor]
+
+					if !all {
+						delete(f_clone)
+					}
 					//fmt.println(result)
 				}
 			}

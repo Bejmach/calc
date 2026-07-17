@@ -1,0 +1,11 @@
+{
+  "functions": {
+    "xyz": {
+      "args": 3,
+      "operation": "$1 + $2 + $3"
+    }
+  },
+  "consts": {
+    "SHIT": "2"
+  }
+}

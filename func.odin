@@ -1,20 +1,17 @@
 #+feature dynamic-literals
 package calc
 
-import "core:slice"
+import "core:encoding/json"
 import "core:fmt"
 import "core:math"
+import "core:os"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 
 void :: struct {}
 
-function :: struct {
-	name: string,
-	args: int,
-}
-
-func_arr := []string{
+func_arr := []string {
 	"sqrt",
 	"pow",
 	"round",
@@ -23,38 +20,53 @@ func_arr := []string{
 	"cos",
 	"cou", // "cos" alias to allow for writing of cou(HI)
 	"tan",
-	"vecLen"
+	"chan", // "tan" alias
+	"vecLen",
 }
 
-func_wrap :: proc(name: string, args: []f64) -> (result: f64, succes: bool) {
+func_wrap :: proc(
+	name: string,
+	args: []f64,
+	customs: ^CustomData,
+	debug: bool,
+) -> (
+	result: f64,
+	succes: bool,
+) {
+	arg_len := len(args)
 	switch name {
 	case "sqrt":
-		if len(args) == 1 {
+		if arg_len == 1 {
 			return math.sqrt_f64(args[0]), true
 		}
 	case "pow":
-		if len(args) == 2 {
+		if arg_len == 2 {
 			return math.pow_f64(args[0], args[1]), true
 		}
 	case "round":
-		if len(args) == 2 {
+		if arg_len == 2 {
 			return func_round(args[0], args[1]), true
 		}
 	case "sin", "sen":
-		if len(args) == 1 {
+		if arg_len == 1 {
 			return math.sin_f64(args[0]), true
 		}
 	case "cos", "cou":
-		if len(args) == 1 {
+		if arg_len == 1 {
 			return math.cos_f64(args[0]), true
 		}
-	case "tan":
-		if len(args) == 1 {
+	case "tan", "chan":
+		if arg_len == 1 {
 			return math.tan_f64(args[0]), true
 		}
 	case "vecLen":
-		if len(args) > 0{
+		if arg_len > 0 {
 			return func_vec_len(args), true
+		}
+	case:
+		func, ok := customs.functions[name]
+		if ok && func.args == arg_len {
+			return solve_custom_function(func.operation, args, customs, debug)
 		}
 	}
 
@@ -62,11 +74,79 @@ func_wrap :: proc(name: string, args: []f64) -> (result: f64, succes: bool) {
 	return 0, false
 }
 
-func_vec_len :: proc(values: []f64) -> f64{
+load_custom_functions :: proc(path: string, e: ^CustomData) -> bool {
+	data, err := os.read_entire_file(path, context.allocator)
+	if err != nil {
+		fmt.eprintln("Failed to read file")
+		return false
+	}
+	defer delete(data)
+
+	err2 := json.unmarshal(data, e)
+	if err2 != nil {
+		fmt.eprintln("Failed to unmarshal:", err)
+		return false
+	}
+
+	return false
+}
+
+delete_customs :: proc(e: ^CustomData) {
+	for key, value in e.functions {
+		delete(key) // free the key string
+		delete(value.operation) // free the operation string
+	}
+	for key, value in e.consts{
+		delete(key)
+		delete(value)
+	}
+
+	delete(e.functions)
+	delete(e.consts)
+}
+
+solve_custom_function :: proc(
+	operation: string,
+	args: []f64,
+	customs: ^CustomData,
+	debug: bool,
+) -> (
+	result: f64,
+	succes: bool,
+) {
+	operation := strings.clone(operation)
+	for i := 0; i < len(args); i += 1 {
+		buf: [4]byte
+		old := fmt.bprintf(buf[:], "$%i", i + 1)
+		buf2: [16]byte
+		new := fmt.bprintf(buf2[:], "%.15g", args[i])
+		old_operation := operation
+		operation, _ = strings.replace_all(operation, old, new)
+		delete(old_operation)
+	}
+
+
+	old_operation := operation
+	operation, _ = strings.replace_all(operation, " ", "")
+	defer delete(operation)
+	delete(old_operation)
+	r, ok := solve_no_iter(operation, customs, debug)
+	
+
+	result, ok = strconv.parse_f64(r)
+
+	if ok {
+		buf: [16]byte
+		return result, true
+	}
+	return 0, false
+}
+
+func_vec_len :: proc(values: []f64) -> f64 {
 	result := values[0]
 
-	for i := 1; i<len(values); i+=1{
-		result = math.sqrt( math.pow_f64(result, 2) + math.pow_f64(values[i], 2) )
+	for i := 1; i < len(values); i += 1 {
+		result = math.sqrt(math.pow_f64(result, 2) + math.pow_f64(values[i], 2))
 	}
 
 	return result
@@ -79,68 +159,71 @@ func_round :: proc(value: f64, zeros: f64) -> f64 {
 	return v
 }
 
-calculate_functons :: proc(content: string) -> (result: string, succes: bool) {
-	new_content := content
-	for func in func_arr {
-		//fmt.println(new_content, func)
+calculate_functons :: proc(
+	content: string,
+	customs: ^CustomData,
+	debug: bool,
+) -> (
+	result: string,
+	succes: bool,
+) {
+	functions := [dynamic]FuncData{}
+	defer delete(functions)
+	find_all_functions(content, customs, &functions)
 
-		offset := 0
-		id := strings.index(new_content[offset:], func)
-		for id != -1 {
-			//fmt.println(id, func)
-			content_len := len(new_content)
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
 
-			params := [dynamic]f64{}
-			defer delete(params)
+	offset := 0
 
-			params_start := id + len(func) + 1
-			if params_start >= content_len {
-				return content, false
-			}
+	content_len := len(content)
 
-			params_end := strings.index_rune(new_content[params_start:], ')')
-			if params_end == -1 {
-				return content, false
-			}
+	succes = true
 
-			params_end += params_start
-
-			if params_end >= content_len {
-				return content, false
-			}
-
-			//fmt.println(params_start, params_end)
-
-			str_params := new_content[params_start:params_end]
-			str_params_arr, _ := strings.split(str_params, ",")
-			defer delete(str_params_arr)
-			for param in str_params_arr {
-				f_param, ok := strconv.parse_f64(param)
-				if ok {
-					append(&params, f_param)
-				} else {
-					return content, false
-				}
-			}
-
-			result, ok := func_wrap(func, params[:])
-			//fmt.println(ok)
-			if ok {
-				builder := strings.builder_make()
-				strings.write_string(&builder, new_content[:id])
-				fmt.sbprintf(&builder, "%.15g", result)
-				if params_end + 2 < content_len {
-					strings.write_string(&builder, new_content[params_end + 1:])
-				}
-				new_content = strings.to_string(builder)
-				//fmt.println(new_content)
-			} else{
-				offset += (params_end - id + 1)
-			}
-
-			id = strings.index(new_content[offset:], func)
+	for data in functions {
+		strings.write_string(&b, content[offset:data.pos])
+		params_start := data.pos + len(data.func) + 1
+		if params_start >= content_len {
+			return strings.clone(content), false
 		}
-	}
 
-	return new_content, true
+		params_end := strings.index_rune(content[params_start:], ')')
+		if params_end == -1 {
+			return strings.clone(content), false
+		}
+
+		params_end += params_start
+
+		if params_end >= content_len {
+			return strings.clone(content), false
+		}
+
+		params := [dynamic]f64{}
+		defer delete(params)
+
+		str_params := content[params_start:params_end]
+		str_params_arr, _ := strings.split(str_params, ",")
+		defer delete(str_params_arr)
+		for param in str_params_arr {
+			f_param, ok := strconv.parse_f64(param)
+			if ok {
+				append(&params, f_param)
+			} else {
+				return strings.clone(content), false
+			}
+		}
+
+		result, ok := func_wrap(data.func, params[:], customs, debug)
+
+		if ok{
+			fmt.sbprintf(&b, "%.15g", result)
+		} else{
+			strings.write_string(&b, content[data.pos:params_end+1])
+		}
+
+		offset += (params_end+1) - data.pos
+	}
+	strings.write_string(&b, content[offset:])
+
+	return strings.clone(strings.to_string(b)), true
 }

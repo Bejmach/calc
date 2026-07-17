@@ -22,11 +22,11 @@ get_config_file_path :: proc() -> (path: string, ok: bool) {
 		return "", false
 	}
 
-	path_b := strings.builder_make()
-	strings.write_string(&path_b, config_dir)
-	strings.write_string(&path_b, "/calc/calc.ini")
-	path = strings.to_string(path_b)
-	defer delete(path)
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+	strings.write_string(&b, config_dir)
+	strings.write_string(&b, "/calc/calc.ini")
+	path = strings.clone(strings.to_string(b))
 	return path, true
 }
 
