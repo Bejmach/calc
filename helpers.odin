@@ -142,6 +142,7 @@ find_all_functions :: proc(s: string, customs: ^CustomData, out: ^[dynamic]FuncD
 	k := 0
 	for key, value in customs.functions{
 		full_func_arr[func_arr_len + k] = key
+		k += 1
 	}
 
 	slice.sort_by(full_func_arr[:], str_len_ord)

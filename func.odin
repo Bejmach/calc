@@ -1,11 +1,8 @@
 #+feature dynamic-literals
 package calc
 
-import "core:encoding/json"
 import "core:fmt"
 import "core:math"
-import "core:os"
-import "core:slice"
 import "core:strconv"
 import "core:strings"
 
@@ -27,6 +24,7 @@ func_arr := []string {
 func_wrap :: proc(
 	name: string,
 	args: []f64,
+	cur_depth, max_depth: i32,
 	customs: ^CustomData,
 	debug: bool,
 ) -> (
@@ -66,7 +64,7 @@ func_wrap :: proc(
 	case:
 		func, ok := customs.functions[name]
 		if ok && func.args == arg_len {
-			return solve_custom_function(func.operation, args, customs, debug)
+			return solve_custom_function(func.operation, args, cur_depth, max_depth, customs, debug)
 		}
 	}
 
@@ -74,40 +72,10 @@ func_wrap :: proc(
 	return 0, false
 }
 
-load_custom_functions :: proc(path: string, e: ^CustomData) -> bool {
-	data, err := os.read_entire_file(path, context.allocator)
-	if err != nil {
-		fmt.eprintln("Failed to read file")
-		return false
-	}
-	defer delete(data)
-
-	err2 := json.unmarshal(data, e)
-	if err2 != nil {
-		fmt.eprintln("Failed to unmarshal:", err)
-		return false
-	}
-
-	return false
-}
-
-delete_customs :: proc(e: ^CustomData) {
-	for key, value in e.functions {
-		delete(key) // free the key string
-		delete(value.operation) // free the operation string
-	}
-	for key, value in e.consts{
-		delete(key)
-		delete(value)
-	}
-
-	delete(e.functions)
-	delete(e.consts)
-}
-
 solve_custom_function :: proc(
 	operation: string,
 	args: []f64,
+	cur_depth, max_depth: i32,
 	customs: ^CustomData,
 	debug: bool,
 ) -> (
@@ -126,12 +94,14 @@ solve_custom_function :: proc(
 	}
 
 
-	old_operation := operation
-	operation, _ = strings.replace_all(operation, " ", "")
-	defer delete(operation)
-	delete(old_operation)
-	r, ok := solve_no_iter(operation, customs, debug)
-	
+	all: bool
+	old_op := operation
+	operation, all = strings.replace_all(operation, " ", "")
+	if all{
+		delete(old_op)
+	}
+	r, ok := solve_no_iter(operation, cur_depth+1, max_depth, customs, debug)
+	delete(operation)
 
 	result, ok = strconv.parse_f64(r)
 
@@ -161,15 +131,21 @@ func_round :: proc(value: f64, zeros: f64) -> f64 {
 
 calculate_functons :: proc(
 	content: string,
+	cur_depth, max_depth: i32,
 	customs: ^CustomData,
 	debug: bool,
 ) -> (
 	result: string,
 	succes: bool,
 ) {
+	if cur_depth > max_depth{
+		return strings.clone(content), false
+	}
+
 	functions := [dynamic]FuncData{}
 	defer delete(functions)
 	find_all_functions(content, customs, &functions)
+
 
 	b := strings.builder_make()
 	defer strings.builder_destroy(&b)
@@ -181,7 +157,9 @@ calculate_functons :: proc(
 	succes = true
 
 	for data in functions {
+		
 		strings.write_string(&b, content[offset:data.pos])
+
 		params_start := data.pos + len(data.func) + 1
 		if params_start >= content_len {
 			return strings.clone(content), false
@@ -213,7 +191,7 @@ calculate_functons :: proc(
 			}
 		}
 
-		result, ok := func_wrap(data.func, params[:], customs, debug)
+		result, ok := func_wrap(data.func, params[:], cur_depth, max_depth, customs, debug)
 
 		if ok{
 			fmt.sbprintf(&b, "%.15g", result)
@@ -221,7 +199,7 @@ calculate_functons :: proc(
 			strings.write_string(&b, content[data.pos:params_end+1])
 		}
 
-		offset += (params_end+1) - data.pos
+		offset = (params_end+1)
 	}
 	strings.write_string(&b, content[offset:])
 

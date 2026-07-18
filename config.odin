@@ -1,6 +1,7 @@
 package calc
 
 import "core:encoding/ini"
+import "core:encoding/json"
 import "core:os"
 import "core:strconv"
 import "core:strings"
@@ -14,9 +15,10 @@ Config :: struct {
 	key_wait_time, key_repeat_time:                          f32,
 	blink_time:                                              f32,
 	background_color, input_color, func_color, result_color: rl.Color,
+	max_depth:                                               i32,
 }
 
-get_config_file_path :: proc() -> (path: string, ok: bool) {
+get_config_file_path :: proc(file: string) -> (path: string, ok: bool) {
 	config_dir, dir_err := os.user_config_dir(context.temp_allocator)
 	if dir_err != nil {
 		return "", false
@@ -25,9 +27,39 @@ get_config_file_path :: proc() -> (path: string, ok: bool) {
 	b := strings.builder_make()
 	defer strings.builder_destroy(&b)
 	strings.write_string(&b, config_dir)
-	strings.write_string(&b, "/calc/calc.ini")
+	strings.write_string(&b, "/calc/")
+	strings.write_string(&b, file)
 	path = strings.clone(strings.to_string(b))
 	return path, true
+}
+
+load_custom_functions :: proc(path: string, e: ^CustomData) -> bool {
+	data, err := os.read_entire_file(path, context.allocator)
+	if err != nil {
+		return false
+	}
+	defer delete(data)
+
+	err2 := json.unmarshal(data, e)
+	if err2 != nil {
+		return false
+	}
+
+	return false
+}
+
+delete_customs :: proc(e: ^CustomData) {
+	for key, value in e.functions {
+		delete(key) // free the key string
+		delete(value.operation) // free the operation string
+	}
+	for key, value in e.consts {
+		delete(key)
+		delete(value)
+	}
+
+	delete(e.functions)
+	delete(e.consts)
 }
 
 update_config :: proc(conf_map: ^ini.Map, conf: ^Config) {

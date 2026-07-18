@@ -246,6 +246,7 @@ split_part :: proc(p: ^Part, parsers: ^[]rune) {
 
 solve :: proc(
 	s: string,
+	max_depth: i32,
 	customs: ^CustomData,
 	debug: bool,
 ) -> (
@@ -276,22 +277,37 @@ solve :: proc(
 
 	slice.sort_by(final_const_arr[:], str_len_ord)
 
-	#reverse for const in final_const_arr {
-		old_func := final_func
-
-		new_value, ok := const_map[const]
-		if !ok {
-			new_value, _ = customs.consts[const]
+	cur_depth: i32 = 0
+	for {
+		if cur_depth > max_depth{
+			if was_allocated{
+				delete(final_func)
+			}
+			return "", false, true
 		}
+		anything_changed: bool = false
+		#reverse for const in final_const_arr {
+			old_func := final_func
 
-		final_func, all = strings.replace_all(final_func, const, new_value)
-		if all {
-			was_allocated = true
-			delete(old_func)
+			new_value, ok := const_map[const]
+			if !ok {
+				new_value, _ = customs.consts[const]
+			}
+
+			final_func, all = strings.replace_all(final_func, const, new_value)
+			if all {
+				was_allocated = true
+				anything_changed = true
+				delete(old_func)
+			}
 		}
+		if !anything_changed{
+			break
+		}
+		cur_depth += 1
 	}
 
-	r, succes, all = solve_iter(final_func, customs, debug)
+	r, succes, all = solve_iter(final_func, max_depth, customs, debug)
 
 	if was_allocated {
 		delete(final_func)
@@ -302,6 +318,7 @@ solve :: proc(
 
 solve_iter :: proc(
 	s: string,
+	max_depth: i32,
 	custom_functions: ^CustomData,
 	debug: bool,
 ) -> (
@@ -318,7 +335,7 @@ solve_iter :: proc(
 	find_all_iterators(s, &iterators)
 
 	if len(iterators) == 0 {
-		r, succes = solve_no_iter(s, custom_functions, debug)
+		r, succes = solve_no_iter(s, 0, max_depth, custom_functions, debug)
 		if succes {
 			r = strip_zeros(r)
 		}
@@ -355,7 +372,7 @@ solve_iter :: proc(
 
 		local_func := strings.to_string(local_b)
 
-		result, ok, all := solve_iter(local_func, custom_functions, debug)
+		result, ok, all := solve_iter(local_func, max_depth, custom_functions, debug)
 		if ok {
 			strings.write_string(&b, result)
 			if all {
@@ -377,6 +394,7 @@ solve_iter :: proc(
 /// Tries to solve passed string and returns provided string if failed
 solve_no_iter :: proc(
 	s: string,
+	cur_depth, max_depth: i32,
 	custom_functions: ^CustomData,
 	debug: bool,
 ) -> (
@@ -400,14 +418,26 @@ solve_no_iter :: proc(
 		strings.write_string(&b, s[offset:scope.start])
 
 		if scope.scope_mode == .Def {
-			scope_result, _ := solve_no_iter(scope.content, custom_functions, debug)
+			scope_result, _ := solve_no_iter(
+				scope.content,
+				cur_depth,
+				max_depth,
+				custom_functions,
+				debug,
+			)
 			strings.write_string(&b, scope_result)
 		} else if scope.scope_mode == .Func {
 			parts := split_preserving_brackets(scope.content, {','})
 
 			strings.write_rune(&b, '(')
 			for part, id in parts {
-				part_result, _ := solve_no_iter(part, custom_functions, debug)
+				part_result, _ := solve_no_iter(
+					part,
+					cur_depth,
+					max_depth,
+					custom_functions,
+					debug,
+				)
 				strings.write_string(&b, part_result)
 				if id < len(parts) - 1 {
 					strings.write_rune(&b, ',')
@@ -423,7 +453,7 @@ solve_no_iter :: proc(
 
 	final_func := strings.to_string(b)
 
-	final_func, _ = calculate_functons(final_func, custom_functions, debug)
+	final_func, _ = calculate_functons(final_func, cur_depth, max_depth, custom_functions, debug)
 	defer delete(final_func)
 
 	base_part: ^Part = new(Part)
