@@ -18,8 +18,12 @@ func_arr := []string {
 	"cou", // "cos" alias to allow for writing of cou(HI)
 	"tan",
 	"chan", // "tan" alias
+	"clamp",
 	"fac", // factorial(silnia)
 	"vecLen",
+	"elim", // limit value to certain ranges. Usefull for custom functions
+	"emin",
+	"emax",
 }
 
 func_wrap :: proc(
@@ -58,18 +62,41 @@ func_wrap :: proc(
 		if arg_len == 1 {
 			return math.tan_f64(args[0]), true
 		}
+	case "clamp":
+		if arg_len == 3 {
+			return math.clamp(args[0], args[1], args[2]), true
+		}
 	case "fac":
-		if arg_len == 1{
+		if arg_len == 1 {
 			return f64(math.factorial(int(args[0]))), true
 		}
 	case "vecLen":
 		if arg_len > 0 {
 			return func_vec_len(args), true
 		}
+	case "elim":
+		if arg_len == 3 {
+			return func_elim(args[0], args[1], args[2])
+		}
+	case "emin":
+		if arg_len == 2 {
+			return func_emin(args[0], args[1])
+		}
+	case "emax":
+		if arg_len == 2 {
+			return func_emax(args[0], args[1])
+		}
 	case:
 		func, ok := customs.functions[name]
 		if ok && func.args == arg_len {
-			return solve_custom_function(func.operation, args, cur_depth, max_depth, customs, debug)
+			return solve_custom_function(
+				func.operation,
+				args,
+				cur_depth,
+				max_depth,
+				customs,
+				debug,
+			)
 		}
 	}
 
@@ -102,10 +129,10 @@ solve_custom_function :: proc(
 	all: bool
 	old_op := operation
 	operation, all = strings.replace_all(operation, " ", "")
-	if all{
+	if all {
 		delete(old_op)
 	}
-	r, ok := solve_no_iter(operation, cur_depth+1, max_depth, customs, debug)
+	r, ok := solve_no_iter(operation, cur_depth + 1, max_depth, customs, debug)
 	delete(operation)
 
 	result, ok = strconv.parse_f64(r)
@@ -134,6 +161,27 @@ func_round :: proc(value: f64, zeros: f64) -> f64 {
 	return v
 }
 
+func_elim :: proc(value, min, max: f64) -> (result: f64, ok: bool) {
+	if value <= max && value >= min {
+		return value, true
+	}
+	return 0, false
+}
+
+func_emin :: proc(value, min: f64) -> (result: f64, ok: bool) {
+	if value >= min {
+		return value, true
+	}
+	return 0, false
+}
+
+func_emax :: proc(value, max: f64) -> (result: f64, ok: bool) {
+	if value <= max {
+		return value, true
+	}
+	return 0, false
+}
+
 calculate_functons :: proc(
 	content: string,
 	cur_depth, max_depth: i32,
@@ -143,7 +191,7 @@ calculate_functons :: proc(
 	result: string,
 	succes: bool,
 ) {
-	if cur_depth > max_depth && max_depth != -1{
+	if cur_depth > max_depth && max_depth != -1 {
 		return strings.clone(content), false
 	}
 
@@ -162,7 +210,7 @@ calculate_functons :: proc(
 	succes = true
 
 	for data in functions {
-		
+
 		strings.write_string(&b, content[offset:data.pos])
 
 		params_start := data.pos + len(data.func) + 1
@@ -198,15 +246,16 @@ calculate_functons :: proc(
 
 		result, ok := func_wrap(data.func, params[:], cur_depth, max_depth, customs, debug)
 
-		if ok{
+		if ok {
 			fmt.sbprintf(&b, "%.15g", result)
-		} else{
-			strings.write_string(&b, content[data.pos:params_end+1])
+		} else {
+			strings.write_string(&b, content[data.pos:params_end + 1])
+			succes = false
 		}
 
-		offset = (params_end+1)
+		offset = (params_end + 1)
 	}
 	strings.write_string(&b, content[offset:])
 
-	return strings.clone(strings.to_string(b)), true
+	return strings.clone(strings.to_string(b)), succes
 }

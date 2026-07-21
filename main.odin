@@ -136,7 +136,7 @@ run_headless :: proc(func: string, customs: ^CustomData, config: ^Config, debug:
 		delete(f_clone)
 	}
 
-	defer delete(result)
+	//defer delete(result)
 	if ok {
 		fmt.println(strip_zeros(result))
 	} else {

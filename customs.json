@@ -2,7 +2,7 @@
   "functions": {
     "bern": {
       "args": 3,
-      "operation": "((fac($1) / (fac($2) * fac($1 - $2))) * pow($3, $2) * pow(1.0 - $3, $1 - $2))"
+      "operation": "((fac(emin($1, 1.0)) / (fac(elim($2, 0.0, $1)) * fac(clamp($1 - $2, 0.0, $1)))) * pow($3, $2) * pow(elim(1.0 - $3, 0.0, 1.0), $1 - $2))"
     }
   },
   "consts": {

@@ -468,8 +468,13 @@ solve_no_iter :: proc(
 
 	final_func := strings.to_string(b)
 
-	final_func, _ = calculate_functons(final_func, cur_depth, max_depth, custom_functions, debug)
+	func_ok: bool
+	final_func, func_ok = calculate_functons(final_func, cur_depth, max_depth, custom_functions, debug)
 	defer delete(final_func)
+
+	if !func_ok{
+		return s, false
+	}
 
 	base_part: ^Part = new(Part)
 	defer delete_part(base_part)
