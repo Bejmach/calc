@@ -27,6 +27,12 @@ Scope :: struct {
 	scope_mode: ScopeMode,
 }
 
+// Range struct "a..b:c"
+Range :: struct{
+	start, end: int,
+	from, to, by: f64,
+}
+
 Iterator :: struct {
 	start, end: int,
 	content:    []string,
@@ -307,13 +313,22 @@ solve :: proc(
 		cur_depth += 1
 	}
 
+	/*ranges := [dynamic]Range{}
+	find_all_ranges(final_func, &ranges)
+	fmt.println(ranges[:])
+
+	return "", false, false
+*/
+	
+
 	r, succes, all = solve_iter(final_func, max_depth, customs, debug)
 
 	if was_allocated {
 		delete(final_func)
 	}
-
+	
 	return r, succes, was_allocated
+	
 }
 
 solve_iter :: proc(

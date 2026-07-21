@@ -4,6 +4,7 @@ package calc
 import "base:runtime"
 import "core:fmt"
 import "core:slice"
+import "core:strconv"
 import "core:strings"
 
 find_all_ops :: proc(s: string, looking_for: []rune, out: ^[dynamic]int) {
@@ -120,13 +121,13 @@ find_all_ocurences_substr :: proc(s: string, sub: string, out: ^[dynamic]int) {
 	}
 }
 
-str_len_ord :: proc(lhs, rhs: string) -> bool{
+str_len_ord :: proc(lhs, rhs: string) -> bool {
 	return len(lhs) < len(rhs)
 }
 
-FuncData :: struct{
-	pos: int,
-	func: string
+FuncData :: struct {
+	pos:  int,
+	func: string,
 }
 
 find_all_functions :: proc(s: string, customs: ^CustomData, out: ^[dynamic]FuncData) {
@@ -136,11 +137,11 @@ find_all_functions :: proc(s: string, customs: ^CustomData, out: ^[dynamic]FuncD
 	full_func_arr := make([]string, len(customs.functions) + func_arr_len)
 	defer delete(full_func_arr)
 
-	for func, pos in func_arr{
+	for func, pos in func_arr {
 		full_func_arr[pos] = func
 	}
 	k := 0
-	for key, value in customs.functions{
+	for key, value in customs.functions {
 		full_func_arr[func_arr_len + k] = key
 		k += 1
 	}
@@ -149,7 +150,7 @@ find_all_functions :: proc(s: string, customs: ^CustomData, out: ^[dynamic]FuncD
 
 	s_len := len(s)
 
-	for i := 0; i<len(s); i+=1 {
+	for i := 0; i < len(s); i += 1 {
 		r := s[i]
 		switch r {
 		case '<', '(':
@@ -158,13 +159,13 @@ find_all_functions :: proc(s: string, customs: ^CustomData, out: ^[dynamic]FuncD
 		case '>', ')':
 			depth -= 1
 		case:
-			#reverse for func in full_func_arr{
+			#reverse for func in full_func_arr {
 				f_len := len(func)
 				f_end := i + f_len
-				if f_end >= s_len{
+				if f_end >= s_len {
 					continue
 				}
-				
+
 				if s[i:f_end] == func && s[f_end] == '(' {
 					append(out, FuncData{i, func})
 					i += f_len
@@ -218,6 +219,120 @@ find_all_scopes :: proc(s: string, out: ^[dynamic]Scope) {
 				temp_func = false
 			}
 		}
+	}
+}
+
+is_num_char :: proc(c: byte, use_minus := true) -> bool {
+	return ('0' <= c && c <= '9') || c == '.' || (use_minus && c == '-')
+}
+
+find_all_ranges :: proc(s: string, out: ^[dynamic]Range) {
+	offset := 0
+
+	dots := offset + strings.index(s[offset:], "..")
+
+	for dots != -1 {
+
+		range_start := 0
+		range_end := 0
+
+		step := 1.0
+		is_ok := true
+
+		if dots == -1 {
+			return
+		}
+
+		left_start := dots - 1
+		minus_counter := 0
+		found_minus := false
+		for left_start >= 0 && is_num_char(s[left_start]) {
+			if s[left_start] == '-' {
+				found_minus = true
+				minus_counter += 1
+			} else if found_minus{
+				minus_counter -= 1
+				left_start += 1
+				break
+			}
+			left_start -= 1
+		}
+		left_start += 1
+		if left_start > 0 && is_num_char(s[left_start - 1], false) {
+			minus_counter -= 1
+		}
+
+		if minus_counter % 2 == 1{
+			left_start += minus_counter-1
+		} else{
+			left_start += minus_counter
+		}
+
+		range_start = left_start
+		left := s[left_start:dots]
+		
+		start, ok := strconv.parse_f64(left)
+
+		is_ok = is_ok && ok
+
+		right_start := dots+2
+		right_end := dots + 2
+		use_minus := true
+		minus_counter = 0
+		for right_end < len(s) && (is_num_char(s[right_end], use_minus)) {
+			if is_num_char(s[right_end], false) {
+				use_minus = false
+			}
+			if s[right_end] == '-'{
+				minus_counter += 1
+			}
+			right_end += 1
+		}
+
+		if minus_counter % 2 == 1{
+			right_start += minus_counter-1
+		} else {
+			right_start += minus_counter
+		}
+
+		range_end = right_end
+		right := s[right_start:right_end]
+		end: f64
+		end, ok = strconv.parse_f64(right)
+		is_ok = is_ok && ok
+
+		if right_end < len(s) && s[right_end] == ':' {
+			step_start := right_end + 1
+			step_end := step_start
+			use_minus = true
+			for step_end < len(s) && is_num_char(s[step_end], use_minus) {
+				if is_num_char(s[step_end], false) {
+					use_minus = false
+				}
+				step_end += 1
+			}
+
+			range_end = step_end
+			offset = step_end
+
+			step_str := s[step_start:step_end]
+
+			step, ok = strconv.parse_f64(step_str)
+			is_ok = is_ok && ok
+		}
+
+		if is_ok {
+			range: Range = Range{range_start, range_end, start, end, step}
+			append(out, range)
+		}
+		offset = range_end
+		fmt.println(offset, len(s))
+		if offset >= len(s){
+			break
+		}
+		fmt.println(s[offset:])
+		dots = offset + strings.index(s[offset:], "..")
+		fmt.println(dots)
 	}
 }
 

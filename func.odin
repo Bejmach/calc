@@ -18,6 +18,7 @@ func_arr := []string {
 	"cou", // "cos" alias to allow for writing of cou(HI)
 	"tan",
 	"chan", // "tan" alias
+	"fac", // factorial(silnia)
 	"vecLen",
 }
 
@@ -56,6 +57,10 @@ func_wrap :: proc(
 	case "tan", "chan":
 		if arg_len == 1 {
 			return math.tan_f64(args[0]), true
+		}
+	case "fac":
+		if arg_len == 1{
+			return f64(math.factorial(int(args[0]))), true
 		}
 	case "vecLen":
 		if arg_len > 0 {

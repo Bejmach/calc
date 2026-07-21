@@ -23,11 +23,19 @@ print_help :: proc() {
 		"-h, --help                     Prints this message",
 		"-d, --debug                    Prints debug messages",
 		"-H, --headless \"<func>\"	       Runs program in headless mode",
+		"-p, --path						Prints filepath, that is expected for configuration"
 	}
 
 	for line in print_arr {
 		fmt.println(line)
 	}
+}
+
+print_path :: proc(){
+	conf_file, conf_ok := get_config_file_path("calc.ini")
+	customs_file, ok := get_config_file_path("customs.json")
+	fmt.println("Config file:", conf_file)
+	fmt.println("Customs file:", customs_file)
 }
 
 main :: proc() {
@@ -60,6 +68,9 @@ main :: proc() {
 		case "-h", "--help":
 			print_help()
 			return
+		case "-p", "--path":
+			print_path()
+			return
 		case "-d", "--debug":
 			debug = true
 		case "-H", "--headless":
@@ -72,7 +83,7 @@ main :: proc() {
 				fmt.println("Example usage: calc -h \"2+2\"")
 				return
 			}
-		case:
+				case:
 			fmt.printfln("Option %s is not supported", arg)
 		}
 	}

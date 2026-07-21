@@ -1,10 +1,12 @@
 package calc
 
+import "core:fmt"
 import "core:encoding/ini"
 import "core:encoding/json"
 import "core:os"
 import "core:strconv"
 import "core:strings"
+import "core:path/filepath"
 
 import rl "vendor:raylib"
 
@@ -18,18 +20,16 @@ Config :: struct {
 	max_depth:                                               i32,
 }
 
-get_config_file_path :: proc(file: string) -> (path: string, ok: bool) {
+get_config_file_path :: proc(file: string) -> (p: string, ok: bool) {
 	config_dir, dir_err := os.user_config_dir(context.temp_allocator)
 	if dir_err != nil {
 		return "", false
 	}
 
-	b := strings.builder_make()
-	defer strings.builder_destroy(&b)
-	strings.write_string(&b, config_dir)
-	strings.write_string(&b, "/calc/")
-	strings.write_string(&b, file)
-	path = strings.clone(strings.to_string(b))
+	path, err := filepath.join({config_dir, "calc", file})
+	if err != nil{
+		return "", false
+	}
 	return path, true
 }
 
@@ -71,6 +71,7 @@ update_config :: proc(conf_map: ^ini.Map, conf: ^Config) {
 	// Usage
 	parse_f32(conf_map, "Usage", "key_wait_time", &conf.key_wait_time)
 	parse_f32(conf_map, "Usage", "key_repeat_time", &conf.key_repeat_time)
+	parse_i32(conf_map, "Usage", "max_depth", &conf.max_depth)
 
 	// Theme
 	parse_i32(conf_map, "Theme", "func_font_size", &conf.func_font_size)
