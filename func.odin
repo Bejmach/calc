@@ -143,7 +143,7 @@ calculate_functons :: proc(
 	result: string,
 	succes: bool,
 ) {
-	if cur_depth > max_depth{
+	if cur_depth > max_depth && max_depth != -1{
 		return strings.clone(content), false
 	}
 

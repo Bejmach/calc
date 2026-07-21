@@ -285,7 +285,7 @@ solve :: proc(
 
 	cur_depth: i32 = 0
 	for {
-		if cur_depth > max_depth{
+		if cur_depth > max_depth && max_depth != -1{
 			if was_allocated{
 				delete(final_func)
 			}

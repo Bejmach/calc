@@ -1,8 +1,8 @@
 {
   "functions": {
-    "xyz": {
+    "bern": {
       "args": 3,
-      "operation": "$1 + $2 + $3"
+      "operation": "((fac($1) / (fac($2) * fac($1 - $2))) * pow($3, $2) * pow(1.0 - $3, $1 - $2))"
     }
   },
   "consts": {
