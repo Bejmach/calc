@@ -433,26 +433,32 @@ solve_no_iter :: proc(
 		strings.write_string(&b, s[offset:scope.start])
 
 		if scope.scope_mode == .Def {
-			scope_result, _ := solve_no_iter(
+			scope_result, ok := solve_no_iter(
 				scope.content,
 				cur_depth,
 				max_depth,
 				custom_functions,
 				debug,
 			)
+			if !ok{
+				return s, false
+			}
 			strings.write_string(&b, scope_result)
 		} else if scope.scope_mode == .Func {
 			parts := split_preserving_brackets(scope.content, {','})
 
 			strings.write_rune(&b, '(')
 			for part, id in parts {
-				part_result, _ := solve_no_iter(
+				part_result, ok := solve_no_iter(
 					part,
 					cur_depth,
 					max_depth,
 					custom_functions,
 					debug,
 				)
+				if !ok{
+				return s, false
+			}
 				strings.write_string(&b, part_result)
 				if id < len(parts) - 1 {
 					strings.write_rune(&b, ',')
