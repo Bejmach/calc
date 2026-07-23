@@ -280,14 +280,15 @@ solve :: proc(
 ) -> (
 	r: string,
 	succes: bool,
-	was_allocated := false,
 ) {
 	old_func := s
+	was_allocated: bool = false
 	final_func, all := strings.replace_all(s, " ", "", context.allocator)
-	if all {
-		was_allocated = true
-		delete(old_func)
-	}
+	was_allocated = all
+	defer {
+		if was_allocated {
+			delete(final_func)
+		}}
 
 	final_const_arr := make([]string, len(const_map) + len(customs.consts))
 	defer delete(final_const_arr)
@@ -308,10 +309,7 @@ solve :: proc(
 	cur_depth: i32 = 0
 	for {
 		if cur_depth > max_depth && max_depth != -1 {
-			if was_allocated {
-				delete(final_func)
-			}
-			return "", false, true
+			return "", false
 		}
 		anything_changed: bool = false
 		#reverse for const in final_const_arr {
@@ -324,7 +322,7 @@ solve :: proc(
 
 			final_func, all = strings.replace_all(final_func, const, new_value)
 			if all {
-				was_allocated = true
+				was_allocated = was_allocated || all
 				anything_changed = true
 				delete(old_func)
 			}
@@ -353,26 +351,24 @@ solve :: proc(
 
 	strings.write_string(&b, final_func[offset:])
 
+	r, succes = solve_iter(strings.to_string(b), cur_depth, max_depth, customs, debug)
 
-	r, succes, all = solve_iter(strings.to_string(b), max_depth, customs, debug)
-
-	if was_allocated {
-		delete(final_func)
-	}
-
-	return r, succes, was_allocated
+	return r, succes
 }
 
 solve_iter :: proc(
 	s: string,
-	max_depth: i32,
+	cur_depth, max_depth: i32,
 	custom_functions: ^CustomData,
 	debug: bool,
 ) -> (
 	r: string,
 	succes: bool,
-	was_allocated: bool,
 ) {
+	if cur_depth >= max_depth {
+		return "", false
+	}
+
 	gen_iterations := 1
 
 	iterators := [dynamic]Iterator{}
@@ -382,11 +378,11 @@ solve_iter :: proc(
 	find_all_iterators(s, &iterators)
 
 	if len(iterators) == 0 {
-		r, succes = solve_no_iter(s, 0, max_depth, custom_functions, debug)
+		r, succes = solve_no_iter(s, cur_depth + 1, max_depth, custom_functions, debug)
 		if succes {
 			r = strip_zeros(r)
 		}
-		return r, succes, false
+		return r, succes
 	}
 
 	// assing dividers for all iterators, to make the furthest ones change the most frequently
@@ -419,23 +415,20 @@ solve_iter :: proc(
 
 		local_func := strings.to_string(local_b)
 
-		result, ok, all := solve_iter(local_func, max_depth, custom_functions, debug)
+		result, ok := solve_iter(local_func, cur_depth + 1, max_depth, custom_functions, debug)
 		if ok {
 			strings.write_string(&b, result)
-			if all {
-				delete(result)
-			}
 		} else {
 			strings.write_string(&b, "ERR")
 		}
 		if g < gen_iterations - 1 {
-			strings.write_string(&b, ", ")
+			strings.write_string(&b, ",")
 		}
 	}
 
 	strings.write_rune(&b, '>')
 
-	return strings.clone(strings.to_string(b)), true, true
+	return strings.clone(strings.to_string(b), context.temp_allocator), true
 }
 
 /// Tries to solve passed string and returns provided string if failed

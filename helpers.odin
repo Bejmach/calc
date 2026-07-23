@@ -389,7 +389,6 @@ find_all_iterators :: proc(s: string, out: ^[dynamic]Iterator) {
 				if i + f_len < str_len && s[i:i + f_len] == ignored && s[i + f_len] == '(' {
 					is_ignored = true
 					i += f_len
-					ignored_depth = 1
 				}
 			}
 		}

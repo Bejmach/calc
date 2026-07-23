@@ -210,7 +210,7 @@ solve_function :: proc(
 	if !slice.contains(iter_ignored_scopes, func_name) {
 
 		for param, i in str_params {
-			param_result, ok, _ := solve_iter(param, max_depth, customs, debug)
+			param_result, ok := solve_no_iter(param, cur_depth + 1, max_depth, customs, debug)
 
 			if ok {
 				f_param, f_ok := strconv.parse_f64(param_result)
@@ -232,7 +232,7 @@ solve_function :: proc(
 				param = param[1:len(param) - 1]
 				append(&str_params, ..split_preserving_brackets(param, {','}))
 			} else {
-				param_result, ok, _ := solve_iter(param, max_depth, customs, debug)
+				param_result, ok := solve_iter(param, cur_depth + 1, max_depth, customs, debug)
 				old := param_result
 				all: bool
 				param_result, all = strings.replace_all(param_result, " ", "")
@@ -264,7 +264,7 @@ solve_function :: proc(
 		return fmt.tprintf("%.15g", r), true
 	}
 
-	return strings.clone(func_name), false
+	return strings.clone(func_name, context.temp_allocator), false
 }
 
 /*calculate_functons :: proc(

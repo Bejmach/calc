@@ -127,16 +127,12 @@ main :: proc() {
 	} else {
 		run_gui(&customs, &c, debug)
 	}
-
 	free_all(context.temp_allocator)
 }
 
 run_headless :: proc(func: string, customs: ^CustomData, config: ^Config, debug: bool) {
-	f_clone := strings.clone(func)
-	result, ok, all := solve(f_clone, config.max_depth, customs, debug)
-	if !all{
-		delete(f_clone)
-	}
+	f_clone := strings.clone(func, context.temp_allocator)
+	result, ok := solve(f_clone, config.max_depth, customs, debug)
 
 	//defer delete(result)
 	if ok {
@@ -232,19 +228,17 @@ run_gui :: proc(customs: ^CustomData, config: ^Config, debug: bool) {
 			parsed_func = transmute(string)cur_func[:len(cur_func) - 1]
 
 			f_clone := strings.clone(parsed_func)
+			defer delete(f_clone)
 			all: bool
 			
-			result, ok, all = solve(f_clone, config.max_depth, customs, debug)
+			free_all(context.temp_allocator)
+			result, ok = solve(f_clone, config.max_depth, customs, debug)
 
 			//fmt.println(result)
 			if ok {
 				result = strip_zeros(result)
 			}
 			measured_text = parsed_func[0:cursor]
-
-			if !all {
-				delete(f_clone)
-			}
 
 			//fmt.println(result)
 		}
@@ -267,17 +261,16 @@ run_gui :: proc(customs: ^CustomData, config: ^Config, debug: bool) {
 					parsed_func = transmute(string)cur_func[:len(cur_func) - 1]
 
 					f_clone := strings.clone(parsed_func)
+					defer delete(f_clone)
 					all: bool
 
-					result, ok, all = solve(f_clone, config.max_depth, customs, debug)
+					free_all(context.temp_allocator)
+					result, ok = solve(f_clone, config.max_depth, customs, debug)
 					if ok {
 						result = strip_zeros(result)
 					}
 					measured_text = parsed_func[0:cursor]
 
-					if !all {
-						delete(f_clone)
-					}
 					//fmt.println(result)
 				}
 			}
