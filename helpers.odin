@@ -7,6 +7,8 @@ import "core:slice"
 import "core:strconv"
 import "core:strings"
 
+iter_ignored_scopes := []string{"sum"}
+
 find_all_ops :: proc(s: string, looking_for: []rune, out: ^[dynamic]int) {
 	// Ignore operators at the start of function
 	scope_start: bool = true
@@ -250,7 +252,7 @@ find_all_ranges :: proc(s: string, out: ^[dynamic]Range) {
 			if s[left_start] == '-' {
 				found_minus = true
 				minus_counter += 1
-			} else if found_minus{
+			} else if found_minus {
 				minus_counter -= 1
 				left_start += 1
 				break
@@ -262,20 +264,20 @@ find_all_ranges :: proc(s: string, out: ^[dynamic]Range) {
 			minus_counter -= 1
 		}
 
-		if minus_counter % 2 == 1{
-			left_start += minus_counter-1
-		} else{
+		if minus_counter % 2 == 1 {
+			left_start += minus_counter - 1
+		} else {
 			left_start += minus_counter
 		}
 
 		range_start = left_start
 		left := s[left_start:dots]
-		
+
 		start, ok := strconv.parse_f64(left)
 
 		is_ok = is_ok && ok
 
-		right_start := dots+2
+		right_start := dots + 2
 		right_end := dots + 2
 		use_minus := true
 		minus_counter = 0
@@ -283,14 +285,14 @@ find_all_ranges :: proc(s: string, out: ^[dynamic]Range) {
 			if is_num_char(s[right_end], false) {
 				use_minus = false
 			}
-			if s[right_end] == '-'{
+			if s[right_end] == '-' {
 				minus_counter += 1
 			}
 			right_end += 1
 		}
 
-		if minus_counter % 2 == 1{
-			right_start += minus_counter-1
+		if minus_counter % 2 == 1 {
+			right_start += minus_counter - 1
 		} else {
 			right_start += minus_counter
 		}
@@ -326,13 +328,10 @@ find_all_ranges :: proc(s: string, out: ^[dynamic]Range) {
 			append(out, range)
 		}
 		offset = range_end
-		fmt.println(offset, len(s))
-		if offset >= len(s){
+		if offset >= len(s) {
 			break
 		}
-		fmt.println(s[offset:])
 		dots = offset + strings.index(s[offset:], "..")
-		fmt.println(dots)
 	}
 }
 
@@ -380,22 +379,52 @@ find_all_iterators :: proc(s: string, out: ^[dynamic]Iterator) {
 
 	iter_recursion := 0
 
-	for r, pos in s {
-		switch r {
-		case '<':
-			if iter_recursion == 0 {
-				iter_start = pos
+	str_len := len(s)
+	is_ignored := false
+	ignored_depth := 0
+	for i := 0; i < str_len; i += 1 {
+		if !is_ignored {
+			for ignored in iter_ignored_scopes {
+				f_len := len(ignored)
+				if i + f_len < str_len && s[i:i + f_len] == ignored && s[i + f_len] == '(' {
+					is_ignored = true
+					i += f_len
+					ignored_depth = 1
+				}
 			}
-			iter_recursion += 1
+		}
+
+		switch s[i] {
+		case '(':
+			if is_ignored {
+				ignored_depth += 1
+			}
+		case ')':
+			if is_ignored {
+				ignored_depth -= 1
+				if ignored_depth == 0 {
+					is_ignored = false
+				}
+			}
+
+		case '<':
+			if !is_ignored {
+				if iter_recursion == 0 {
+					iter_start = i
+				}
+				iter_recursion += 1
+			}
 
 		case '>':
-			iter_recursion -= 1
-			if iter_recursion == 0 {
-				content: string = s[iter_start + 1:pos]
-				append(
-					out,
-					Iterator{iter_start, pos, split_preserving_brackets(content, {','}), 1},
-				)
+			if !is_ignored {
+				iter_recursion -= 1
+				if iter_recursion == 0 {
+					content: string = s[iter_start + 1:i]
+					append(
+						out,
+						Iterator{iter_start, i, split_preserving_brackets(content, {','}), 1},
+					)
+				}
 			}
 		}
 	}

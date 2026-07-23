@@ -28,9 +28,31 @@ Scope :: struct {
 }
 
 // Range struct "a..b:c"
-Range :: struct{
-	start, end: int,
+Range :: struct {
+	start, end:   int,
 	from, to, by: f64,
+}
+
+parse_range :: proc(range: ^Range) -> string {
+	distance := range.to - range.from
+	steps := int((distance / range.by))
+
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+
+	strings.write_rune(&b, '<')
+
+	for i := 0; i <= steps; i += 1 {
+		fmt.sbprintf(&b, "%.15g", range.from + range.by * f64(i))
+
+		if i < steps {
+			strings.write_rune(&b, ',')
+		}
+	}
+
+	strings.write_rune(&b, '>')
+
+	return strings.clone(strings.to_string(b), context.temp_allocator)
 }
 
 Iterator :: struct {
@@ -285,8 +307,8 @@ solve :: proc(
 
 	cur_depth: i32 = 0
 	for {
-		if cur_depth > max_depth && max_depth != -1{
-			if was_allocated{
+		if cur_depth > max_depth && max_depth != -1 {
+			if was_allocated {
 				delete(final_func)
 			}
 			return "", false, true
@@ -307,28 +329,38 @@ solve :: proc(
 				delete(old_func)
 			}
 		}
-		if !anything_changed{
+		if !anything_changed {
 			break
 		}
 		cur_depth += 1
 	}
 
-	/*ranges := [dynamic]Range{}
+
+	ranges := [dynamic]Range{}
+	defer delete(ranges)
 	find_all_ranges(final_func, &ranges)
-	fmt.println(ranges[:])
 
-	return "", false, false
-*/
-	
+	offset := 0
 
-	r, succes, all = solve_iter(final_func, max_depth, customs, debug)
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+
+	for &range in ranges {
+		strings.write_string(&b, final_func[offset:range.start])
+		strings.write_string(&b, parse_range(&range))
+		offset = range.end
+	}
+
+	strings.write_string(&b, final_func[offset:])
+
+
+	r, succes, all = solve_iter(strings.to_string(b), max_depth, customs, debug)
 
 	if was_allocated {
 		delete(final_func)
 	}
-	
+
 	return r, succes, was_allocated
-	
 }
 
 solve_iter :: proc(
@@ -430,9 +462,8 @@ solve_no_iter :: proc(
 	offset := 0
 
 	for scope, id in scopes {
-		strings.write_string(&b, s[offset:scope.start])
-
 		if scope.scope_mode == .Def {
+			strings.write_string(&b, s[offset:scope.start])
 			scope_result, ok := solve_no_iter(
 				scope.content,
 				cur_depth,
@@ -440,31 +471,46 @@ solve_no_iter :: proc(
 				custom_functions,
 				debug,
 			)
-			if !ok{
+
+			if !ok {
 				return s, false
 			}
 			strings.write_string(&b, scope_result)
 		} else if scope.scope_mode == .Func {
-			parts := split_preserving_brackets(scope.content, {','})
+			func_start := scope.start
+			break_loop := false
+			for func_start > 0 {
+				if break_loop {
+					break
+				}
 
-			strings.write_rune(&b, '(')
-			for part, id in parts {
-				part_result, ok := solve_no_iter(
-					part,
-					cur_depth,
-					max_depth,
-					custom_functions,
-					debug,
-				)
-				if !ok{
+				switch s[func_start] {
+				case '+', '-', '*', '/':
+					func_start += 1
+					break_loop = true
+					continue
+				}
+
+				func_start -= 1
+			}
+
+			func_name := s[func_start:scope.start]
+			strings.write_string(&b, s[offset:func_start])
+
+			result, ok := solve_function(
+				func_name,
+				scope.content,
+				cur_depth,
+				max_depth,
+				custom_functions,
+				debug,
+			)
+
+			if !ok {
 				return s, false
 			}
-				strings.write_string(&b, part_result)
-				if id < len(parts) - 1 {
-					strings.write_rune(&b, ',')
-				}
-			}
-			strings.write_rune(&b, ')')
+
+			strings.write_string(&b, result)
 		}
 
 		//fmt.println(scope_result, ok)
@@ -473,14 +519,6 @@ solve_no_iter :: proc(
 	strings.write_string(&b, s[offset:])
 
 	final_func := strings.to_string(b)
-
-	func_ok: bool
-	final_func, func_ok = calculate_functons(final_func, cur_depth, max_depth, custom_functions, debug)
-	defer delete(final_func)
-
-	if !func_ok{
-		return s, false
-	}
 
 	base_part: ^Part = new(Part)
 	defer delete_part(base_part)
@@ -496,6 +534,7 @@ solve_no_iter :: proc(
 	}
 	result, ok := solve_part(base_part, debug)
 	//fmt.println(result)
+
 	if ok {
 		result_str := fmt.tprintf("%.15f", result)
 		//		fmt.println(result_str)

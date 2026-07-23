@@ -127,6 +127,8 @@ main :: proc() {
 	} else {
 		run_gui(&customs, &c, debug)
 	}
+
+	free_all(context.temp_allocator)
 }
 
 run_headless :: proc(func: string, customs: ^CustomData, config: ^Config, debug: bool) {

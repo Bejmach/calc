@@ -3,6 +3,7 @@ package calc
 
 import "core:fmt"
 import "core:math"
+import "core:slice"
 import "core:strconv"
 import "core:strings"
 
@@ -24,6 +25,7 @@ func_arr := []string {
 	"elim", // limit value to certain ranges. Usefull for custom functions
 	"emin",
 	"emax",
+	"sum",
 }
 
 func_wrap :: proc(
@@ -86,6 +88,8 @@ func_wrap :: proc(
 		if arg_len == 2 {
 			return func_emax(args[0], args[1])
 		}
+	case "sum":
+		return math.sum(args), true
 	case:
 		func, ok := customs.functions[name]
 		if ok && func.args == arg_len {
@@ -182,7 +186,88 @@ func_emax :: proc(value, max: f64) -> (result: f64, ok: bool) {
 	return 0, false
 }
 
-calculate_functons :: proc(
+solve_function :: proc(
+	func_name: string,
+	content: string,
+	cur_depth, max_depth: i32,
+	customs: ^CustomData,
+	debug: bool,
+) -> (
+	result: string,
+	succes: bool,
+) {
+	if cur_depth > max_depth && max_depth != -1 {
+		return strings.clone(func_name), false
+	}
+
+	str_params := [dynamic]string{}
+	defer delete(str_params)
+	append(&str_params, ..split_preserving_brackets(content, {','}))
+
+	params := [dynamic]f64{}
+	defer delete(params)
+
+	if !slice.contains(iter_ignored_scopes, func_name) {
+
+		for param, i in str_params {
+			param_result, ok, _ := solve_iter(param, max_depth, customs, debug)
+
+			if ok {
+				f_param, f_ok := strconv.parse_f64(param_result)
+				if ok {
+					append(&params, f_param)
+				} else {
+					return strings.clone(func_name), false
+				}
+			}
+		}
+
+	} else {
+		for i := 0; i < len(str_params); i += 1 {
+			param := str_params[i]
+			if len(param) == 0 {
+				continue
+			}
+			if param[0] == '<' && param[len(param) - 1] == '>' {
+				param = param[1:len(param) - 1]
+				append(&str_params, ..split_preserving_brackets(param, {','}))
+			} else {
+				param_result, ok, _ := solve_iter(param, max_depth, customs, debug)
+				old := param_result
+				all: bool
+				param_result, all = strings.replace_all(param_result, " ", "")
+				if all {
+					delete(old)
+				}
+				if param_result[0] == '<' {
+					param_result = param_result[1:len(param_result) - 1]
+					append(&str_params, ..split_preserving_brackets(param_result, {','}))
+					continue
+				}
+
+				if ok {
+					f_param, f_ok := strconv.parse_f64(param_result)
+					if ok {
+						append(&params, f_param)
+					} else {
+						return strings.clone(func_name), false
+					}
+				}
+			}
+		}
+	}
+
+
+	r, ok := func_wrap(func_name, params[:], cur_depth, max_depth, customs, debug)
+
+	if ok {
+		return fmt.tprintf("%.15g", r), true
+	}
+
+	return strings.clone(func_name), false
+}
+
+/*calculate_functons :: proc(
 	content: string,
 	cur_depth, max_depth: i32,
 	customs: ^CustomData,
@@ -198,6 +283,8 @@ calculate_functons :: proc(
 	functions := [dynamic]FuncData{}
 	defer delete(functions)
 	find_all_functions(content, customs, &functions)
+
+	fmt.println(functions[:])
 
 
 	b := strings.builder_make()
@@ -258,4 +345,4 @@ calculate_functons :: proc(
 	strings.write_string(&b, content[offset:])
 
 	return strings.clone(strings.to_string(b)), succes
-}
+}*/
